@@ -2,7 +2,7 @@
 
 HTML/CSS/JavaScript-прототип листа «Б1 + Бригадир + Осн Напарник» с правилами листа «График Бригады».
 
-**Демо:** https://user14052020.github.io/work-schedule/  
+**Демо:** https://user14052020.github.io/work-schedule/
 **Вход:** `admin` / `admin` — поля уже заполнены.
 
 ## Что работает
