@@ -1,4 +1,4 @@
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 export const ROLE_NAMES = ['Бригадир', 'Основной напарник', 'Доп. №1', 'Доп. №2', 'Доп. №2 — второй сотрудник'];
 export const JOB_FIELDS = ['time','person0','person1','person2','person3','invoice','pay','adjustment','shiftHours','objectId','type','hours','object','phone','objectNotes','task','notes','tech'];
 export const clone = value => JSON.parse(JSON.stringify(value));
@@ -52,7 +52,9 @@ function originalState() {
 }
 
 const PERIOD_FIELDS = ['roster','days','collapsedDays','monthCollapsed'];
+const BRIGADE_FIELDS = ['period',...PERIOD_FIELDS,'periods'];
 const emptyRoster = () => ['', '', '', '', ''];
+const defaultBrigades = () => Array.from({length:4},(_,index)=>({id:`b${index+1}`,code:`Б${index+1}`,label:`Бригада ${index+1}`}));
 
 function periodParts(key) {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(key));
@@ -71,6 +73,22 @@ function periodCalendar(key, roster = emptyRoster()) {
 }
 
 function periodSnapshot(state) { return Object.fromEntries(PERIOD_FIELDS.map(field=>[field,state[field]])); }
+function brigadeSnapshot(state) { return Object.fromEntries(BRIGADE_FIELDS.map(field=>[field,state[field]])); }
+function emptyBrigade(period) { return {period,...periodCalendar(period),periods:{}}; }
+
+export function brigadeName(state) { return state.brigades?.find(brigade=>brigade.id===state.brigadeId)?.code || ''; }
+
+export function switchBrigade(state,id) {
+  if (!state.brigades?.some(brigade=>brigade.id===id)) throw Error('Выберите бригаду из справочника.');
+  if (state.brigadeId===id) return state;
+  const next=Object.hasOwn(state.brigadeSchedules || {},id) ? state.brigadeSchedules[id] : emptyBrigade(state.period);
+  switchPeriod(next,state.period);
+  if (!state.brigadeSchedules) state.brigadeSchedules={};
+  state.brigadeSchedules[state.brigadeId]=brigadeSnapshot(state);
+  delete state.brigadeSchedules[id];
+  Object.assign(state,next,{brigadeId:id});
+  return state;
+}
 
 export function switchPeriod(state,key) {
   periodParts(key);
@@ -84,7 +102,8 @@ export function switchPeriod(state,key) {
 }
 
 export function allDays(state) {
-  return [...(state.days || []),...Object.entries(state.periods || {}).filter(([key])=>key !== state.period).flatMap(([,period])=>period.days || [])];
+  const scheduleDays=schedule=>[...(schedule.days || []),...Object.entries(schedule.periods || {}).filter(([key])=>key !== schedule.period).flatMap(([,period])=>period.days || [])];
+  return [...scheduleDays(state),...Object.entries(state.brigadeSchedules || {}).filter(([id])=>id!==state.brigadeId).flatMap(([,schedule])=>scheduleDays(schedule))];
 }
 
 function demoRoster(state, wanted) {
@@ -144,28 +163,91 @@ function seededAugust(state) {
   return period;
 }
 
+function secondBrigadePeriod(state,key) {
+  const august=key==='2026-08', code=state.brigades.find(brigade=>brigade.id==='b2').code;
+  const wanted=august?['e10','e5','','','']:['e9','e11','','',''];
+  const period=periodCalendar(key,demoRoster(state,wanted));
+  const choices=['ЧКНД','ЧХЛД','ПХД','ОСМ','ПЖУ','ЧК'].filter(code=>state.workTypes.some(type=>type.code===code));
+  if (!choices.length) choices.push(...state.workTypes.filter(type=>type.code!=='ПРЗД').map(type=>type.code));
+  const tasks={
+    ЧКНД:'Провести утреннее обслуживание внутренних блоков: очистить фильтры, испарители и дренаж.',
+    ЧХЛД:'Обслужить холодильные витрины: очистить конденсаторы и проверить работу вентиляторов.',
+    ПХД:'Подготовить оборудование на базе: промыть инструмент, проверить комплектность и собрать расходники.',
+    ОСМ:'Выполнить дневной контрольный осмотр, снять размеры и подготовить фотоотчёт для следующего выезда.',
+    ПЖУ:'Подготовить детали жироуловителя, собрать корпус и проверить герметичность перед передачей.',
+    ЧК:'Очистить сливные линии производственного участка и проверить сток на каждом подключении.'
+  };
+  period.days=period.days.map((day,index)=>{
+    const number=index+1;
+    day.roster=demoRoster(state,[...wanted.slice(0,2),august?(number%2?'e9':'e11'):'e5','','']);
+    day.statuses=day.roster.map(id=>id?'РД':'');
+    day.rows=Array.from({length:5},(_,slot)=>{
+      const row=blankRow(), travel=slot%2===1;
+      row.type=travel && state.workTypes.some(type=>type.code==='ПРЗД')?'ПРЗД':choices[(number+slot+(august?1:3))%Math.max(1,choices.length)] || '';
+      row.hours=travel?(slot===1?.25:.5):[1.25,0,1.5,0,1][slot]+((number+slot+(august?1:0))%3)*.5;
+      row.invoice=travel?'':state.invoiceStates.includes('ДА')?'ДА':state.invoiceStates[0] || '';
+      if (travel) row.objectNotes=`${code}: ${slot===1?'переезд после утреннего обслуживания':'переезд на заключительный дневной выезд'}.`;
+      else {
+        const object=state.objects[(number+slot+(august?5:4))%Math.max(1,state.objects.length)];
+        if (object) applyObject(state,row,object.id);
+        row.time=['07:30','','10:30','','13:00'][slot];
+        row.task=tasks[row.type] || state.workTypes.find(type=>type.code===row.type)?.label || 'Дневное плановое обслуживание.';
+        row.notes=`${code} · дневной маршрут ${day.date.slice(8)}.${day.date.slice(5,7)}. ${slot===0?'Получить доступ до открытия объекта.':slot===2?'Зафиксировать состояние оборудования до и после работ.':'Сдать выполненные работы ответственному на месте.'}`;
+      }
+      return row;
+    });
+    return day;
+  });
+  return period;
+}
+
+function addInitialBrigades(state) {
+  state.brigades=defaultBrigades();
+  state.brigadeId='b1';
+  state.brigadeSchedules={
+    b2:{period:'2026-09',...secondBrigadePeriod(state,'2026-09'),periods:{'2026-08':secondBrigadePeriod(state,'2026-08')}},
+    b3:emptyBrigade(state.period),
+    b4:emptyBrigade(state.period)
+  };
+}
+
 export function initialState() {
   const state=originalState();
   state.period='2026-09';
   state.days=state.days.map((day,index)=>index<2?day:seedDay(state,day.date));
   state.periods={'2026-08':seededAugust(state)};
+  addInitialBrigades(state);
   return state;
 }
 
 function normalizePeriod(snapshot,key) {
   if (!snapshot || !Array.isArray(snapshot.days) || !Array.isArray(snapshot.roster) || snapshot.roster.length !== 5) throw Error('Сохранённый график имеет неверную структуру.');
-  const calendar=periodCalendar(key,snapshot.roster);
-  const validDates=new Set(calendar.days.map(day=>day.date)), seen=new Set();
+  const {year,month}=periodParts(key), length=new Date(Date.UTC(year,month,0)).getUTCDate();
+  const dates=Array.from({length},(_,index)=>`${key}-${String(index+1).padStart(2,'0')}`);
+  const validDates=new Set(dates), seen=new Set();
   for (const day of snapshot.days) {
     if (!validDates.has(day.date) || seen.has(day.date) || !Array.isArray(day.roster) || day.roster.length!==5 || !Array.isArray(day.statuses) || day.statuses.length!==5 || !Array.isArray(day.rows)) throw Error('В сохранённом графике неверные или повторяющиеся даты.');
     if (day.rows.some(row=>!row || !Array.isArray(row.people) || row.people.length!==5)) throw Error('Сохранённые работы имеют неверную структуру.');
     seen.add(day.date);
   }
   const saved=new Map(snapshot.days.map(day=>[day.date,day]));
-  calendar.days=calendar.days.map(day=>saved.get(day.date) || day);
-  calendar.collapsedDays=[...new Set((snapshot.collapsedDays || []).filter(date=>validDates.has(date)))];
-  calendar.monthCollapsed=Boolean(snapshot.monthCollapsed);
-  return calendar;
+  return {
+    roster:[...snapshot.roster],
+    days:dates.map(date=>saved.get(date) || {date,roster:[...snapshot.roster],statuses:snapshot.roster.map(id=>id?'РД':''),pay:null,adjustment:null,hoursOverride:null,rows:Array.from({length:5},blankRow)}),
+    collapsedDays:[...new Set((snapshot.collapsedDays || []).filter(date=>validDates.has(date)))],
+    monthCollapsed:Boolean(snapshot.monthCollapsed)
+  };
+}
+
+function normalizeBrigade(snapshot,key=snapshot.period) {
+  periodParts(key);
+  const active=normalizePeriod(snapshot,key), periods={};
+  if (snapshot.periods && (typeof snapshot.periods!=='object' || Array.isArray(snapshot.periods))) throw Error('Сохранённые месяцы имеют неверную структуру.');
+  for (const [period,month] of Object.entries(snapshot.periods || {})) {
+    periodParts(period);
+    if (period!==key) periods[period]=normalizePeriod(month,period);
+  }
+  return {period:key,...active,periods};
 }
 
 function originalBlankDay(day,baseline) {
@@ -176,25 +258,39 @@ function originalBlankDay(day,baseline) {
 
 export function migrateState(saved) {
   if (saved === null || saved === undefined) return initialState();
-  if (!saved || ![1,SCHEMA].includes(saved.schema)) throw Error('Версия сохранённых данных не поддерживается.');
-  const state=clone(saved), baseline=originalState();
+  if (!saved || ![1,2,SCHEMA].includes(saved.schema)) throw Error('Версия сохранённых данных не поддерживается.');
+  const state=clone(saved), legacy=state.schema===1, needsBrigades=state.schema<3;
+  let baseline;
+  const defaults=()=>baseline || (baseline=originalState());
   for (const key of ['employees','objects','workTypes','statuses','positions','rates','invoiceStates','groups']) {
-    if (state[key] === undefined && ['positions','rates','invoiceStates','groups'].includes(key)) state[key]=clone(baseline[key]);
+    if (state[key] === undefined && ['positions','rates','invoiceStates','groups'].includes(key)) state[key]=clone(defaults()[key]);
     if (!Array.isArray(state[key])) throw Error('Сохранённые справочники имеют неверную структуру.');
   }
-  const legacy=state.schema===1;
-  const key=legacy?'2026-09':state.period;
-  periodParts(key);
-  const active=normalizePeriod(state,key);
-  if (legacy) active.days=active.days.map(day=>originalBlankDay(day,baseline.days.find(original=>original.date===day.date))?seedDay(state,day.date):day);
-  const periods={};
-  if (state.periods && (typeof state.periods !== 'object' || Array.isArray(state.periods))) throw Error('Сохранённые месяцы имеют неверную структуру.');
-  for (const [period,snapshot] of Object.entries(state.periods || {})) {
-    periodParts(period);
-    if (period!==key) periods[period]=normalizePeriod(snapshot,period);
+  const active=normalizeBrigade(state,legacy?'2026-09':state.period);
+  if (legacy) {
+    active.days=active.days.map(day=>originalBlankDay(day,defaults().days.find(original=>original.date===day.date))?seedDay(state,day.date):day);
+    if (!active.periods['2026-08']) active.periods['2026-08']=seededAugust(state);
   }
-  if (legacy && !periods['2026-08']) periods['2026-08']=seededAugust(state);
-  Object.assign(state,active,{schema:SCHEMA,period:key,periods});
+  Object.assign(state,active,{schema:SCHEMA});
+  if (needsBrigades) addInitialBrigades(state);
+  else {
+    const ids=new Set(), codes=new Set();
+    if (!Array.isArray(state.brigades) || !state.brigades.length) throw Error('Сохранённый справочник бригад имеет неверную структуру.');
+    for (const brigade of state.brigades) {
+      if (!brigade || typeof brigade.id!=='string' || !brigade.id.trim() || ['__proto__','constructor','prototype'].includes(brigade.id) || ids.has(brigade.id) || typeof brigade.code!=='string' || !brigade.code.trim() || typeof brigade.label!=='string' || !brigade.label.trim()) throw Error('В справочнике бригад неверные или повторяющиеся записи.');
+      const code=brigade.code.trim().toLocaleLowerCase('ru');
+      if (codes.has(code)) throw Error('Коды бригад не должны повторяться.');
+      ids.add(brigade.id);codes.add(code);
+    }
+    if (!ids.has(state.brigadeId)) throw Error('Активная бригада отсутствует в справочнике.');
+    if (!state.brigadeSchedules || typeof state.brigadeSchedules!=='object' || Array.isArray(state.brigadeSchedules)) throw Error('Сохранённые графики бригад имеют неверную структуру.');
+    const schedules={};
+    for (const [id,schedule] of Object.entries(state.brigadeSchedules)) {
+      if (!ids.has(id)) throw Error('График ссылается на неизвестную бригаду.');
+      if (id!==state.brigadeId) schedules[id]=normalizeBrigade(schedule);
+    }
+    state.brigadeSchedules=schedules;
+  }
   return state;
 }
 export function employeeName(state,id) { return state.employees.find(e=>e.id===id)?.name || ''; }
