@@ -41,6 +41,11 @@ function utcDate(value) {
   return date;
 }
 
+function periodDate(state, fallbackDate) {
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(state.period || '')) return utcDate(`${state.period}-01`);
+  return state.days.length ? utcDate(state.days[0].date) : fallbackDate;
+}
+
 function numeric(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -80,7 +85,7 @@ function addSchedule(workbook, state, exportedAt) {
   sheet.properties.outlineLevelRow = 1;
   sheet.properties.outlineProperties = {summaryBelow: false, summaryRight: false};
   sheet.pageSetup.printTitlesRow = '1:2';
-  const firstDate = state.days.length ? utcDate(state.days[0].date) : exportedAt;
+  const firstDate = periodDate(state, exportedAt);
   const month = new Intl.DateTimeFormat('ru-RU',{month:'long',timeZone:'UTC'}).format(firstDate).toLocaleUpperCase('ru-RU');
   const period = new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(firstDate);
   const headerStyle = {fill: COLORS.month, bold: true, align: 'center'};
@@ -223,7 +228,8 @@ export function buildWorkbook(state, ExcelJS) {
   const exportedAt = new Date();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'График бригады';
-  workbook.title = 'График бригады — снимок данных';
+  const period = new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(periodDate(state,exportedAt));
+  workbook.title = `График бригады — ${period}`;
   workbook.subject = 'График, сотрудники и справочники';
   workbook.description = 'Снимок значений из демонстрационной учётной системы. Базовая зарплата предварительная.';
   workbook.created = exportedAt;
