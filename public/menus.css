@@ -1,0 +1,53 @@
+.directory { max-width: 1500px; margin: 0 auto; padding: 30px 32px 50px; color: #243831; font-family: inherit; }
+.directory-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.directory-eyebrow { color: #667c71; font-size: 10px; font-weight: 700; letter-spacing: .13em; margin-bottom: 7px; }
+.directory h1 { margin: 0 0 8px; font-size: 27px; line-height: 1.15; letter-spacing: -.025em; font-weight: 650; }
+.directory-heading p, .directory-panel-heading p { margin: 0; font-size: 12px; line-height: 1.5; color: #6b7c74; }
+.directory-counter { display: flex; flex-direction: column; gap: 3px; padding: 0 0 0 22px; border-left: 1px solid #d9e3dc; white-space: nowrap; }
+.directory-counter strong { color: #27704f; font-size: 27px; font-weight: 600; }
+.directory-counter span { color: #6b7c74; font-size: 11px; }
+.directory-panel { background: #fff; border: 1px solid #dce4de; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px #20362a03; min-width: 0; }
+.directory-panel-heading { padding: 17px 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.directory h2 { margin: 0 0 5px; color: #263e32; font-size: 14px; font-weight: 650; }
+.directory .directory-add { flex: 0 0 auto; border: 1px solid #cfded3; border-radius: 6px; background: #f4f8f5; color: #2b6245; padding: 8px 11px; font-size: 11px; line-height: 1.2; font-weight: 600; cursor: pointer; font-family: inherit; }
+.directory .directory-add:hover { background: #e7f1e9; border-color: #aabfb0; }
+.directory .directory-add:focus-visible { outline: 2px solid #26784e; outline-offset: 2px; }
+.directory-table-scroll { overflow-x: auto; scrollbar-width: thin; }
+.directory-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.directory-table th { background: #f4f6f3; border-top: 1px solid #e0e7e1; border-bottom: 1px solid #dce5dd; color: #64766a; font-size: 10px; line-height: 1.4; font-weight: 650; padding: 10px 9px; vertical-align: middle; }
+.directory-table td { border-bottom: 1px solid #e9eee9; border-right: 1px solid #edf1ed; padding: 3px; vertical-align: middle; }
+.directory-table td:last-child { border-right: 0; }
+.directory-table tr:last-child td { border-bottom: 0; }
+.directory-table tbody tr:nth-child(even) { background: #fbfcfa; }
+.directory-table tbody tr:hover { background: #f3f8f3; }
+.directory-table .directory-index { text-align: center; color: #91a096; font-variant-numeric: tabular-nums; font-size: 10px; width: 32px; padding: 7px; }
+.directory .directory-table input:not([type=checkbox]), .directory .directory-table select, .directory .directory-table textarea { width: 100%; box-sizing: border-box; min-width: 70px; font-family: inherit; font-size: 12px; line-height: 1.5; color: #334b3c; border: 1px solid transparent; border-radius: 4px; background: transparent; padding: 7px 6px; outline: none; }
+.directory .directory-table textarea { min-width: 150px; min-height: 58px; resize: vertical; display: block; }
+.directory .directory-table input:not([type=checkbox]):hover, .directory .directory-table select:hover, .directory .directory-table textarea:hover { border-color: #cbdccd; background: #fff; }
+.directory .directory-table input:not([type=checkbox]):focus, .directory .directory-table select:focus, .directory .directory-table textarea:focus { border-color: #31815b; background: #fff; box-shadow: 0 0 0 2px #31815b18; }
+.directory .directory-table input[type=number] { font-variant-numeric: tabular-nums; min-width: 78px; }
+.directory .directory-table input::placeholder { color: #a1aea5; }
+.directory-check { display: inline-flex; align-items: center; gap: 7px; padding: 7px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.directory-check input { width: 14px; height: 14px; accent-color: #378461; margin: 0; cursor: pointer; }
+.directory-table .directory-hours { text-align: right; padding: 9px 14px; color: #2c6244; font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.directory-hours span { color: #8a9b8e; font-size: 10px; font-weight: 400; padding-left: 4px; }
+.directory-inactive td { opacity: .64; }
+.directory-inactive td:focus-within { opacity: 1; }
+.directory-employees { min-width: 1080px; }
+.directory-employees th:nth-child(2) { width: 21%; }
+.directory-employees th:nth-child(3) { width: 15%; }
+.directory-employees th:nth-child(5) { width: 16%; }
+.directory-objects { min-width: 1320px; }
+.directory-objects th:first-child { width: 90px; }
+.directory-objects th:nth-child(2) { width: 19%; }
+.directory-objects th:nth-child(3) { width: 16%; }
+.directory-objects th:nth-child(4), .directory-objects th:nth-child(5) { width: 21%; }
+.directory-grid { display: grid; grid-template-columns: 1.1fr 1.1fr .7fr; gap: 20px; align-items: start; }
+.directory-grid .directory-panel-heading { min-height: 97px; flex-wrap: wrap; }
+.directory-grid .directory-table th:nth-child(2) { width: 80px; }
+.directory-grid .directory-table th:last-child { min-width: 120px; }
+.directory-grid .directory-panel:last-child .directory-table th:last-child { min-width: 70px; }
+.directory-footnote { color: #738579; font-size: 11px; line-height: 1.7; margin: 4px 2px 0; max-width: 1020px; }
+.directory-empty { text-align: center; padding: 20px !important; color: #7e9083; }
+@media (max-width: 1120px) { .directory-grid { grid-template-columns: 1fr 1fr; } .directory-grid .directory-panel:last-child { grid-column: 1 / -1; } .directory-grid .directory-panel:last-child .directory-panel-heading { min-height: auto; } }
+@media (max-width: 700px) { .directory { padding: 22px 14px 36px; } .directory-heading { gap: 14px; } .directory-counter { padding-left: 12px; } .directory-counter span { white-space: normal; max-width: 94px; line-height: 1.4; } .directory h1 { font-size: 23px; } .directory-grid { grid-template-columns: 1fr; gap: 0; } .directory-panel-heading { padding: 14px; } .directory-grid .directory-panel-heading { min-height: auto; } .directory .directory-add { white-space: nowrap; } }

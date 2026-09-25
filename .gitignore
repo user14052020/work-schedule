@@ -1,0 +1,10 @@
+*.xlsx
+*.xls
+~$*
+.private/
+node_modules/
+.env
+.env.*
+test-results/
+playwright-report/
+*.log
