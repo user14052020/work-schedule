@@ -109,5 +109,3 @@ export function toCsv(state) {
   const cell=value=>{let str=String(value??'');if(typeof value==='string'&&/^[\s]*[=+\-@]/.test(str))str="'"+str;return '"'+str.replace(/"/g,'""')+'"';};
   return '\ufeff'+rows.map(r=>r.map(cell).join(';')).join('\r\n');
 }
-
-
