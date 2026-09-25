@@ -95,17 +95,3 @@ export function applyPaste(state,date,rowIndex,column,text) {
     if(field==='time')v=v.replace('.',':').replace(/^(\d):/,'0$1:');setJobField(state,day,day.rows[rowIndex+r],field,v);
   }));
 }
-export function toCsv(state) {
-  const columns=['Дата','Время','Бригадир','Осн. напарник','Доп. №1','Доп. №2','Счет','ЗП за смену','Штрафы/премии','Часов за смену','№ объекта','Вид','Часов на бригаду','Объект','Телефон работ','Примечания по объекту','ТЗ','Примечания по работам','Техбаза',...ROLE_NAMES.flatMap(role=>[`${role} смены`,`Статус: ${role}`])];
-  const rows=[columns];
-  for(const day of state.days){
-    let first=true;const active=day.rows.filter(rowActive);
-    for(const r of active.length?active:[day.rows[0]]){
-      const names=[0,1,2].map(i=>employeeName(state,participantAt(day,r,i)));
-      names.push([3,4].map(i=>employeeName(state,participantAt(day,r,i))).filter(Boolean).join(', '));
-      rows.push([day.date,r.time,...names,r.invoice,first?dayPay(state,day):'',first?day.adjustment:'',first?dayHours(day):'',r.objectId,r.type,r.hours,r.object,r.phone,r.objectNotes,r.task,r.notes,r.tech,...day.roster.flatMap((id,i)=>[employeeName(state,id),day.statuses[i]])]);first=false;
-    }
-  }
-  const cell=value=>{let str=String(value??'');if(typeof value==='string'&&/^[\s]*[=+\-@]/.test(str))str="'"+str;return '"'+str.replace(/"/g,'""')+'"';};
-  return '\ufeff'+rows.map(r=>r.map(cell).join(';')).join('\r\n');
-}
