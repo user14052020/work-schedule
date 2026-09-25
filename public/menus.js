@@ -1,4 +1,4 @@
-import { employeeHours, uid } from './model.js';
+import { employeeHours, allDays, uid } from './model.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const decimal = value => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value || 0);
@@ -89,14 +89,14 @@ function unique(entries, value, current, field, label) {
 }
 
 function employeeAssigned(state,id) {
-  return (state.roster || []).includes(id) || (state.days || []).some(day => day.roster.includes(id) || day.rows.some(row => row.people.includes(id)));
+  return (state.roster || []).includes(id) || Object.values(state.periods || {}).some(period=>(period.roster || []).includes(id)) || allDays(state).some(day => day.roster.includes(id) || day.rows.some(row => row.people.includes(id)));
 }
 
 function codeReferenced(state,kind,code) {
-  if (kind === 'workTypes') return state.days.some(day => day.rows.some(row => row.type === code));
-  if (kind === 'statuses') return state.days.some(day => day.statuses.includes(code));
+  if (kind === 'workTypes') return allDays(state).some(day => day.rows.some(row => row.type === code));
+  if (kind === 'statuses') return allDays(state).some(day => day.statuses.includes(code));
   if (kind === 'positions') return state.employees.some(employee => employee.position === code);
-  if (kind === 'invoices') return state.days.some(day => day.rows.some(row => row.invoice === code));
+  if (kind === 'invoices') return allDays(state).some(day => day.rows.some(row => row.invoice === code));
   return false;
 }
 
@@ -185,7 +185,7 @@ export function handleMenuChange(state, target) {
     const value = clean(target.value,'Значение',field === 'id' || field === 'name',field === 'id' ? 50 : 5000);
     if (field === 'id') {
       unique(state.objects,value,object,'id','Номер объекта');
-      if (value !== id && state.days.some(day=>day.rows.some(row=>row.objectId === id))) throw Error('Номер уже используется в графике. Название и остальные данные можно изменить.');
+      if (value !== id && allDays(state).some(day=>day.rows.some(row=>row.objectId === id))) throw Error('Номер уже используется в графике. Название и остальные данные можно изменить.');
     }
     if (field === 'name') unique(state.objects,value,object,'name','Название объекта');
     if (field === 'tech' && value) {
@@ -195,7 +195,7 @@ export function handleMenuChange(state, target) {
     const oldValue = object[field];
     object[field] = value;
     const rowField = {name:'object',phone:'phone',notes:'objectNotes',task:'task',tech:'tech'}[field];
-    if (rowField) for (const day of state.days) for (const row of day.rows) if (row.objectId === id && row[rowField] === oldValue) row[rowField] = value;
+    if (rowField) for (const day of allDays(state)) for (const row of day.rows) if (row.objectId === id && row[rowField] === oldValue) row[rowField] = value;
     return true;
   }
   throw Error('Неизвестный справочник.');

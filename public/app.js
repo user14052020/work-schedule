@@ -1,4 +1,4 @@
-import {SCHEMA,ROLE_NAMES,JOB_FIELDS,clone,uid,blankRow,initialState,employeeName,eligibleEmployees,participantAt,rowHasData,rowActive,calculatedHours,dayHours,monthHours,typeTotals,applyObject,applyRoster,validateRoster,setJobField,applyPaste,basicPay,dayPay} from './model.js';
+import {SCHEMA,ROLE_NAMES,JOB_FIELDS,clone,uid,blankRow,initialState,migrateState,switchPeriod,employeeName,eligibleEmployees,participantAt,rowHasData,rowActive,calculatedHours,dayHours,monthHours,typeTotals,applyObject,applyRoster,validateRoster,setJobField,applyPaste,basicPay,dayPay} from './model.js';
 import {renderMenu,handleMenuChange,handleMenuAction} from './menus.js';
 
 const $=id=>document.getElementById(id);
@@ -6,27 +6,30 @@ const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 const num=value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(value);
 const STORAGE='work-schedule-demo-v1';
 const AUTH='work-schedule-demo-session';
-let storageAvailable=true, state=initialState(), undoStack=[], view='schedule', toastTimer;
-try{const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');if(saved){if(saved.schema!==SCHEMA||!Array.isArray(saved.days)||saved.days.length!==30||!saved.rates||!saved.positions||!saved.employees||!saved.workTypes||!saved.statuses||!saved.objects||saved.days.some(d=>!Array.isArray(d.rows)||!Array.isArray(d.roster)||!Array.isArray(d.statuses)))throw Error('Invalid data');state=saved;}}catch{storageAvailable=false;}
+let storageAvailable=true, state=initialState(), undoStack=[], view='schedule', toastTimer, renderedPeriod='';
+try{const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');if(saved){state=migrateState(saved);if(saved.schema!==SCHEMA){state.revision=uid();localStorage.setItem(STORAGE,JSON.stringify(state));}}}catch{storageAvailable=false;}
+const MONTH_NAMES=Array.from({length:12},(_,month)=>new Intl.DateTimeFormat('ru-RU',{month:'long',timeZone:'UTC'}).format(new Date(Date.UTC(2026,month,1)))).map(name=>name[0].toUpperCase()+name.slice(1));
+const shortDate=date=>new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',timeZone:'UTC'}).format(new Date(date+'T12:00:00Z'));
+const periodTitle=()=>`${MONTH_NAMES[Number(state.period.slice(5))-1]} ${state.period.slice(0,4)}`;
 
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true;},4500);}
 function status(message){$('save-status').textContent=message;}
 function save(){state.revision=uid();try{localStorage.setItem(STORAGE,JSON.stringify(state));storageAvailable=true;status('Сохранено в этом браузере');}catch{storageAvailable=false;status('Не сохранено: хранилище недоступно');toast('Изменения пока только в памяти. Выгрузите XLSX перед закрытием.');}}
 function mutate(fn,message){
   try{
-    if(storageAvailable){const latest=JSON.parse(localStorage.getItem(STORAGE)||'null');if(latest&&latest.revision!==state.revision){state=latest;render();toast('Данные изменены в другой вкладке. Загружена свежая версия; повторите правку.');return false;}}
+    if(storageAvailable){const latest=JSON.parse(localStorage.getItem(STORAGE)||'null');if(latest&&latest.revision!==state.revision){state=migrateState(latest);undoStack=[];render();toast('Данные изменены в другой вкладке. Загружена свежая версия; повторите правку.');return false;}}
     const before=clone(state), next=clone(state);fn(next);state=next;undoStack.push(before);if(undoStack.length>30)undoStack.shift();save();render();if(message)toast(message);return true;
   }catch(error){toast(error.message||'Не удалось применить изменение.');render();return false;}
 }
 function options(items,value,blank='—'){return `${blank===null?'':`<option value="">${escape(blank)}</option>`}`+items.map(item=>{const val=typeof item==='string'?item:item.value,label=typeof item==='string'?item:item.label;return `<option value="${escape(val)}" ${val===value?'selected':''}>${escape(label)}</option>`;}).join('');}
 function employeeOptions(value){const employees=eligibleEmployees(state);const current=state.employees.find(e=>e.id===value);if(current&&!employees.some(e=>e.id===value))employees.push(current);return options(employees.map(e=>({value:e.id,label:e.name+(!e.active?' (неактивен)':'')})),value);}
 function fieldLabel(field){return {time:'Время',invoice:'Счет',pay:'ЗП за смену',adjustment:'Штрафы и премии',shiftHours:'Часов за смену',objectId:'Номер объекта',type:'Вид работ',hours:'Часов на бригаду',object:'Объект',phone:'Телефон работ',objectNotes:'Примечания по объекту',task:'ТЗ на работы',notes:'Примечания по работам',tech:'Техбаза'}[field]||ROLE_NAMES[Number(field.replace('person',''))];}
-function attributes(day,row,field){return `data-day="${day.date}" data-row="${row.id}" data-field="${field}" aria-label="${escape(fieldLabel(field))}, ${Number(day.date.slice(-2))} сентября, строка ${day.rows.indexOf(row)+1}"`;}
+function attributes(day,row,field){return `data-day="${day.date}" data-row="${row.id}" data-field="${field}" aria-label="${escape(fieldLabel(field))}, ${shortDate(day.date)}, строка ${day.rows.indexOf(row)+1}"`;}
 function input(day,row,field,value,{type='text',placeholder='',className='',title=''}={}){const limits=type==='number'?(field==='hours'?'min="0" max="24" step="0.25"':field==='shiftHours'?'min="0" max="1000" step="0.25"':`min="${field==='adjustment'?-10000000:0}" max="10000000" step="1"`):'';return `<input class="cell-input ${className}" ${attributes(day,row,field)} type="${type}" value="${escape(value??'')}" placeholder="${escape(placeholder)}" title="${escape(title)}" ${limits} ${type==='text'?'maxlength="5000"':''}>`;}
 function textarea(day,row,field,value,className=''){return `<textarea class="cell-input ${className}" ${attributes(day,row,field)} maxlength="5000" rows="2" placeholder="—">${escape(value)}</textarea>`;}
 function select(day,row,field,value,items,blank='—'){return `<select class="cell-input" ${attributes(day,row,field)}>${options(items,value,blank)}</select>`;}
-function selectedDays(){const filter=$('day-filter').value;return state.days.filter(d=>filter==='all'||filter==='demo'&&d.date<='2026-09-03'||filter===d.date);}
-function dayTitle(day){const date=new Date(day.date+'T12:00:00');return `${date.getDate()} сентября`;}
+function selectedDays(){const filter=$('day-filter').value;return state.days.filter(d=>filter==='all'||filter==='demo'&&Number(d.date.slice(-2))<=3||filter===d.date);}
+function dayTitle(day){return shortDate(day.date);}
 function renderDay(day,index){
   const collapsed=state.collapsedDays.includes(day.date), n=day.rows.filter(rowActive).length;
   const weekday=new Intl.DateTimeFormat('ru-RU',{weekday:'long'}).format(new Date(day.date+'T12:00:00'));
@@ -43,6 +46,10 @@ function renderDay(day,index){
   });return html;
 }
 function render(){
+  if(renderedPeriod!==state.period){initializeScheduleView();renderedPeriod=state.period;}
+  $('period-month').value=state.period.slice(5);$('period-year').value=state.period.slice(0,4);
+  $('summary-period').textContent=`${periodTitle()} · весь месяц`;
+  $('schedule-table').caption.textContent=`Смены и работы бригады 1, ${periodTitle()}`;
   const focused=document.activeElement;const focusKey=focused?.dataset.field?{day:focused.dataset.day,row:focused.dataset.row,field:focused.dataset.field}:null;
   const scroll=document.querySelector('.table-scroll'),top=scroll.scrollTop,left=scroll.scrollLeft;
   $('total-hours').textContent=num(monthHours(state));
@@ -66,11 +73,25 @@ function initializeScheduleView(){
   const now=new Date(),today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   state.monthCollapsed=false;
   state.collapsedDays=state.days.filter(day=>day.date!==today).map(day=>day.date);
+  $('period-month').innerHTML=MONTH_NAMES.map((name,index)=>`<option value="${String(index+1).padStart(2,'0')}">${name}</option>`).join('');
+  const years=[...new Set([2024,2025,2026,2027,2028,Number(state.period.slice(0,4)),...Object.keys(state.periods||{}).map(key=>Number(key.slice(0,4)))])].sort((a,b)=>a-b);
+  $('period-year').innerHTML=years.map(year=>`<option value="${year}">${year}</option>`).join('');
+  $('day-filter').innerHTML='<option value="all">Весь месяц</option><option value="demo">Первые три дня</option>'+state.days.map(d=>`<option value="${d.date}">${dayTitle(d)}</option>`).join('');
   $('day-filter').value='all';
   const dates=state.days.map(day=>day.date).sort(),from=dates[0],to=dates.at(-1);
   for(const id of ['period-from','period-to']){$(id).min=from;$(id).max=to;}
   $('period-from').value=from;$('period-to').value=to;
   return today;
+}
+function changePeriod(){
+  const key=`${$('period-year').value}-${$('period-month').value}`;
+  if(key===state.period)return;
+  try{
+    if(storageAvailable){const latest=JSON.parse(localStorage.getItem(STORAGE)||'null');if(latest&&latest.revision!==state.revision){state=migrateState(latest);undoStack=[];render();toast('Данные обновлены из другой вкладки. Выберите период повторно.');return;}}
+    const next=clone(state);switchPeriod(next,key);state=next;undoStack=[];
+    const today=initializeScheduleView();renderedPeriod=state.period;save();render();
+    document.querySelector('.table-scroll').scrollTop=0;scrollToDay(today);
+  }catch(error){toast(error.message||'Не удалось открыть период.');render();}
 }
 function scrollToDay(date){
   const scroll=document.querySelector('.table-scroll'),row=$('schedule-body').querySelector(`[data-collapse-day="${date}"]`)?.closest('tr');
@@ -81,11 +102,12 @@ $('login-form').addEventListener('submit',event=>{event.preventDefault();if($('l
 $('toggle-password').addEventListener('click',()=>{const hidden=$('password').type==='password';$('password').type=hidden?'text':'password';$('toggle-password').setAttribute('aria-label',hidden?'Скрыть пароль':'Показать пароль');});
 $('logout').addEventListener('click',()=>{try{sessionStorage.removeItem(AUTH);}catch{}document.querySelectorAll('dialog[open]').forEach(d=>d.close());$('app-view').hidden=true;$('login-view').hidden=false;$('password').value='admin';$('login').focus();});
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
-$('day-filter').innerHTML+=state.days.map(d=>`<option value="${d.date}">${dayTitle(d)}</option>`).join('');
+$('period-month').addEventListener('change',changePeriod);
+$('period-year').addEventListener('change',changePeriod);
 $('day-filter').addEventListener('change',render);
 $('collapse-month').addEventListener('click',()=>mutate(s=>{s.monthCollapsed=!s.monthCollapsed;}));
 $('collapse-days').addEventListener('click',()=>{const dates=selectedDays().map(d=>d.date),expand=dates.every(d=>state.collapsedDays.includes(d));mutate(s=>{s.collapsedDays=expand?s.collapsedDays.filter(d=>!dates.includes(d)):[...new Set([...s.collapsedDays,...dates])];});});
-$('apply-roster').addEventListener('click',()=>{const roster=[...document.querySelectorAll('[data-roster]')].map(el=>el.value),from=$('period-from').value,to=$('period-to').value;let count=0;if(mutate(s=>{count=applyRoster(s,roster,from,to);}))toast(`Состав применен: ${count} смен. Период ${from.slice(-2)}–${to.slice(-2)} сентября.`);});
+$('apply-roster').addEventListener('click',()=>{const roster=[...document.querySelectorAll('[data-roster]')].map(el=>el.value),from=$('period-from').value,to=$('period-to').value;let count=0;if(mutate(s=>{count=applyRoster(s,roster,from,to);}))toast(`Состав применен: ${count} смен. Период: ${shortDate(from)} — ${shortDate(to)}.`);});
 $('schedule-body').addEventListener('click',event=>{const collapse=event.target.closest('[data-collapse-day]'),add=event.target.closest('[data-add-rows]');if(collapse)mutate(s=>{const date=collapse.dataset.collapseDay;s.collapsedDays=s.collapsedDays.includes(date)?s.collapsedDays.filter(d=>d!==date):[...s.collapsedDays,date];});if(add)mutate(s=>{s.days.find(d=>d.date===add.dataset.addRows).rows.push(blankRow(),blankRow());s.collapsedDays=s.collapsedDays.filter(d=>d!==add.dataset.addRows);},'Добавлены две строки.');});
 $('schedule-body').addEventListener('change',event=>{const el=event.target,date=el.dataset.day;if(!date)return;
   if(el.dataset.field){if(el.checkValidity&&!el.checkValidity()){el.reportValidity();return;}mutate(s=>{const day=s.days.find(d=>d.date===date),row=day.rows.find(r=>r.id===el.dataset.row);setJobField(s,day,row,el.dataset.field,el.value);});}
@@ -96,17 +118,17 @@ $('schedule-body').addEventListener('paste',event=>{const el=event.target;if(!el
 $('schedule-body').addEventListener('keydown',event=>{const el=event.target;if(!el.dataset.field)return;if(event.key==='Escape'){event.preventDefault();render();el.blur();return;}if(event.key==='Enter'&&el.tagName!=='TEXTAREA'){event.preventDefault();el.blur();return;}if(event.key==='Tab'){
   const controls=[...$('schedule-body').querySelectorAll('input,select,textarea')],index=controls.indexOf(el),next=controls[index+(event.shiftKey?-1:1)];if(!next)return;event.preventDefault();const identity={field:next.dataset.field,row:next.dataset.row,day:next.dataset.day,person:next.dataset.shiftPerson,status:next.dataset.shiftStatus};el.blur();queueMicrotask(()=>{const fresh=[...$('schedule-body').querySelectorAll('input,select,textarea')].find(n=>n.dataset.day===identity.day&&n.dataset.field===identity.field&&n.dataset.row===identity.row&&n.dataset.shiftPerson===identity.person&&n.dataset.shiftStatus===identity.status);fresh?.focus();});
 }});
-$('undo').addEventListener('click',()=>{if(!undoStack.length)return;try{const latest=JSON.parse(localStorage.getItem(STORAGE)||'null');if(latest&&latest.revision!==state.revision){state=latest;undoStack=[];render();toast('Данные изменились в другой вкладке. История отмены очищена.');return;}}catch{}state=undoStack.pop();save();render();toast('Последнее изменение отменено.');});
+$('undo').addEventListener('click',()=>{if(!undoStack.length)return;try{const latest=JSON.parse(localStorage.getItem(STORAGE)||'null');if(latest&&latest.revision!==state.revision){state=migrateState(latest);undoStack=[];render();toast('Данные изменились в другой вкладке. История отмены очищена.');return;}}catch{}state=undoStack.pop();save();render();toast('Последнее изменение отменено.');});
 $('reset').addEventListener('click',()=>$('reset-dialog').showModal());
 $('confirm-reset').addEventListener('click',()=>{const before=clone(state);state=initialState();undoStack.push(before);const today=initializeScheduleView();save();render();scrollToDay(today);$('reset-dialog').close();toast('Начальные данные восстановлены.');});
 $('export').addEventListener('click',async()=>{const button=$('export');button.disabled=true;button.textContent='Подготовка XLSX…';try{const snapshot=clone(state);const {downloadXlsx}=await import('./download-xlsx.js');await downloadXlsx(snapshot);toast('Книга XLSX готова: график, сотрудники и справочники.');}catch(error){toast(error.message||'Не удалось создать файл Excel.');}finally{button.disabled=false;button.textContent='↓ Экспорт XLSX';}});
 $('help').addEventListener('click',()=>$('help-dialog').showModal());
 document.querySelectorAll('.close-dialog').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));
-$('add-work').addEventListener('click',()=>{const filter=$('day-filter').value;$('new-day').innerHTML=state.days.map(d=>`<option value="${d.date}">${dayTitle(d)}</option>`).join('');$('new-day').value=filter.startsWith('2026-')?filter:'2026-09-01';$('new-type').innerHTML=options(state.workTypes.map(t=>({value:t.code,label:`${t.code} — ${t.label}`})),'ЧВ',null);$('new-object').innerHTML=options(state.objects.map(o=>({value:o.id,label:`${o.id} · ${o.name}`})),'','Без объекта / переезд');$('add-dialog').showModal();});
+$('add-work').addEventListener('click',()=>{const filter=$('day-filter').value;$('new-day').innerHTML=state.days.map(d=>`<option value="${d.date}">${dayTitle(d)}</option>`).join('');$('new-day').value=state.days.some(d=>d.date===filter)?filter:state.days[0].date;$('new-type').innerHTML=options(state.workTypes.map(t=>({value:t.code,label:`${t.code} — ${t.label}`})),'ЧВ',null);$('new-object').innerHTML=options(state.objects.map(o=>({value:o.id,label:`${o.id} · ${o.name}`})),'','Без объекта / переезд');$('add-dialog').showModal();});
 $('add-form').addEventListener('submit',event=>{event.preventDefault();const date=$('new-day').value;if(mutate(s=>{const day=s.days.find(d=>d.date===date);let row=day.rows.find(r=>!rowActive(r));if(!row){day.rows.push(blankRow(),blankRow());row=day.rows.at(-2);}setJobField(s,day,row,'type',$('new-type').value);setJobField(s,day,row,'time',$('new-time').value);setJobField(s,day,row,'hours',$('new-hours').value);if($('new-object').value)applyObject(s,row,$('new-object').value);s.monthCollapsed=false;s.collapsedDays=s.collapsedDays.filter(d=>d!==date);})){$('add-dialog').close();$('day-filter').value=date;render();toast('Работа добавлена в график.');}});
 $('directory-view').addEventListener('change',event=>mutate(s=>handleMenuChange(s,event.target)));
 $('directory-view').addEventListener('click',event=>{const action=event.target.closest('[data-menu-action]');if(action)mutate(s=>handleMenuAction(s,action));});
-window.addEventListener('storage',event=>{if(event.key!==STORAGE||!event.newValue)return;try{const updated=JSON.parse(event.newValue);if(updated.schema===SCHEMA){state=updated;undoStack=[];render();toast('График обновлен из другой вкладки.');}}catch{toast('Не удалось прочитать изменения из другой вкладки.');}});
-document.querySelector('.help-list').innerHTML=`<li>В шапке выберите сотрудников группы «Поля» и период. «Применить» заменит состав этих смен, а новым сотрудникам поставит РД. Состав каждой смены можно изменить отдельно.</li><li>В задания подставляется состав смены при статусах РД или ДЕЖ и заполненном виде работ. Имя в задании можно убрать или вернуть. Часы сотрудника учитывают только его задания.</li><li>Редактируйте все ячейки с данными. Вид, статус, счет и сотрудники проверяются по справочникам, в том числе при вставке диапазона из Excel. Tab переводит в следующую ячейку, Enter завершает правку, Escape отменяет незавершенный ввод.</li><li>Стрелки у месяца и дня сворачивают строки. «+ 2 строки» расширяет смену. При входе показан весь месяц: дни свернуты, текущий день раскрыт. Период применения состава по умолчанию охватывает весь месяц.</li><li>Номер объекта подставляет название, контакт, примечание и ТЗ. Поля можно дополнить вручную. Изменение справочника обновляет связанные поля заданий; ручные дополнения сохраняются.</li><li>Зарплата — предварительная сумма базовых ставок по часам каждого сотрудника с учетом водителя и отпуска; доплаты бригадиру, обучение, штрафы и премии в нее не включены. Для остальных статусов ставка в демо равна нулю. Условия расчета нужно согласовать для рабочей версии.</li><li>Расчетные часы и зарплату можно заменить вручную: появится пометка «вручную». Очистите ячейку, чтобы вернуть формулу. Справочник ставок используется в базовом расчете сразу.</li><li>Меню «Сотрудники» и «Справочники» содержит редактируемые списки. В демо вымышленные люди и объекты. XLSX содержит график, сотрудников и справочники с цветами и группировкой строк. Значения сохраняются как снимок на момент выгрузки.</li><li>Все изменения сохраняются только в текущем браузере. Вход admin/admin демонстрационный; совместная работа и защищенная авторизация требуют сервера PHP.</li>`;
+window.addEventListener('storage',event=>{if(event.key!==STORAGE||!event.newValue)return;try{state=migrateState(JSON.parse(event.newValue));undoStack=[];render();toast('График обновлен из другой вкладки.');}catch{toast('Не удалось прочитать изменения из другой вкладки.');}});
+document.querySelector('.help-list').innerHTML=`<li>В блоке «Период» выбирайте месяц и год. Август и сентябрь 2026 заполнены работами на каждый день. Правки сохраняются отдельно для каждого месяца; сотрудники и справочники общие. Остальные месяцы можно заполнить самостоятельно.</li><li>В шапке выберите сотрудников группы «Поля» и период. «Применить» заменит состав этих смен, а новым сотрудникам поставит РД. Состав каждой смены можно изменить отдельно.</li><li>В задания подставляется состав смены при статусах РД или ДЕЖ и заполненном виде работ. Имя в задании можно убрать или вернуть. Часы сотрудника учитывают только его задания.</li><li>Редактируйте все ячейки с данными. Вид, статус, счет и сотрудники проверяются по справочникам, в том числе при вставке диапазона из Excel. Tab переводит в следующую ячейку, Enter завершает правку, Escape отменяет незавершенный ввод.</li><li>Стрелки у месяца и дня сворачивают строки. «+ 2 строки» расширяет смену. При входе показан весь месяц: дни свернуты, текущий день раскрыт. Период применения состава по умолчанию охватывает весь месяц.</li><li>Номер объекта подставляет название, контакт, примечание и ТЗ. Поля можно дополнить вручную. Изменение справочника обновляет связанные поля заданий; ручные дополнения сохраняются.</li><li>Зарплата — предварительная сумма базовых ставок по часам каждого сотрудника с учетом водителя и отпуска; доплаты бригадиру, обучение, штрафы и премии в нее не включены. Для остальных статусов ставка в демо равна нулю. Условия расчета нужно согласовать для рабочей версии.</li><li>Расчетные часы и зарплату можно заменить вручную: появится пометка «вручную». Очистите ячейку, чтобы вернуть формулу. Справочник ставок используется в базовом расчете сразу.</li><li>Меню «Сотрудники» и «Справочники» содержит редактируемые списки. В демо вымышленные люди и объекты. XLSX содержит график, сотрудников и справочники с цветами и группировкой строк. Значения сохраняются как снимок на момент выгрузки.</li><li>Все изменения сохраняются только в текущем браузере. Вход admin/admin демонстрационный; совместная работа и защищенная авторизация требуют сервера PHP.</li>`;
 try{if(sessionStorage.getItem(AUTH)==='demo')login();}catch{}
 render();

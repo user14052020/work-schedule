@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { initialState, clone, dayPay, dayHours } from '../public/model.js';
+import { initialState, clone, blankRow, dayPay, dayHours, monthHours, employeeHours, switchPeriod } from '../public/model.js';
 import { buildWorkbook } from '../public/xlsx-export.js';
 
 // Execute the same vendored browser bundle that the page downloads, without a DOM.
@@ -27,14 +27,27 @@ async function roundTrip(state) {
   return { workbook, bytes };
 }
 
-const baselineState = initialState();
+// A small, explicit source-example fixture keeps the known 21.5-hour totals
+// independent of the additional filled demonstration months.
+function sourceExample() {
+  const state = initialState();
+  switchPeriod(state, '2026-09');
+  state.days = state.days.slice(0, 3);
+  Object.assign(state.days[2], {
+    roster: ['e1', 'e2', '', '', ''], statuses: ['ОТП', 'Б2', '', '', ''],
+    pay: null, adjustment: null, hoursOverride: null, rows: Array.from({ length: 5 }, blankRow),
+  });
+  return state;
+}
+
+const baselineState = sourceExample();
 const baseline = roundTrip(baselineState);
 
 function dayLocations(state) {
   let row = 3;
   return state.days.map(day => {
     const result = { day, dateRow: row, rosterRow: row + 2, statusRow: row + 3, firstJobRow: row + 4 };
-    row += 4 + day.rows.length;
+    row += 4 + Math.max(1, day.rows.length);
     return result;
   });
 }
@@ -53,7 +66,7 @@ test('XLSX browser export round-trips as a real workbook with three useful sheet
   assert.equal(typeof workbook.getWorksheet(SCHEDULE_NAME).getCell('J1').value, 'number');
 });
 
-test('XLSX retains all thirty dated shifts, numeric totals, and leave status on an empty day', async () => {
+test('XLSX retains every fixture shift, numeric totals, and leave status on an empty day', async () => {
   const { workbook } = await baseline;
   const sheet = workbook.getWorksheet(SCHEDULE_NAME);
   for (const { day, dateRow, firstJobRow } of dayLocations(baselineState)) {
@@ -100,7 +113,7 @@ test('XLSX includes employees and editable dictionaries with employee hours and 
 });
 
 test('XLSX snapshot keeps manual values, collapsed days and formula-looking text as literal strings', async () => {
-  const state = initialState();
+  const state = sourceExample();
   state.days[0].pay = 12345;
   state.days[0].hoursOverride = 7.25;
   state.days[2].pay = 4321;
@@ -125,3 +138,45 @@ test('XLSX snapshot keeps manual values, collapsed days and formula-looking text
     assert.equal(cell.formula, undefined, `unexpected executable formula in ${cell.address}`);
   }));
 });
+
+for (const [period, dayCount, monthName, filled] of [
+  ['2026-08', 31, 'АВГУСТ', true],
+  ['2026-09', 30, 'СЕНТЯБРЬ', true],
+  ['2028-02', 29, 'ФЕВРАЛЬ', false],
+]) {
+  test(`XLSX round-trip exports only selected ${period}, all ${dayCount} calendar days and its totals`, async () => {
+    const state = initialState();
+    // Mark a different month to detect accidental leakage from the period cache.
+    switchPeriod(state, period === '2026-09' ? '2026-08' : '2026-09');
+    state.days[0].rows[0].notes = 'Другой месяц — не экспортировать';
+    switchPeriod(state, period);
+    assert.equal(state.period, period);
+    assert.equal(state.days.length, dayCount);
+    if (filled) assert.ok(state.days.every(day => day.rows.some(row => row.type && row.hours > 0)), 'every seeded day has work');
+    else assert.ok(state.days.every(day => dayHours(day) === 0), 'new period starts without work');
+    const expectedHours = monthHours(state);
+    const { workbook } = await roundTrip(state);
+    const sheet = workbook.getWorksheet(SCHEDULE_NAME);
+    assert.equal(sheet.getCell('A1').value, monthName);
+    assert.match(sheet.getCell('K1').value, new RegExp(period.slice(0, 4)));
+    assert.match(workbook.title, new RegExp(period.slice(0, 4)));
+    assert.equal(sheet.getCell('J1').value, expectedHours);
+    const dates = [];
+    for (const { day, dateRow, firstJobRow } of dayLocations(state)) {
+      const date = sheet.getCell(`C${dateRow}`).value;
+      assert.ok(date instanceof Date);
+      dates.push(date.toISOString().slice(0, 10));
+      assert.equal(dates.at(-1), day.date);
+      assert.equal(sheet.getCell(`H${firstJobRow}`).value, dayPay(state, day));
+      assert.equal(sheet.getCell(`J${firstJobRow}`).value, dayHours(day));
+    }
+    assert.equal(new Set(dates).size, dayCount);
+    assert.equal(dates[0], `${period}-01`);
+    assert.equal(dates.at(-1), `${period}-${dayCount}`);
+    const exportedDates = allCellValues(sheet).filter(value => value instanceof Date).map(value => value.toISOString().slice(0, 7));
+    assert.ok(exportedDates.every(value => value === period));
+    assert.ok(!allCellValues(sheet).includes('Другой месяц — не экспортировать'));
+    const staff = workbook.getWorksheet('Сотрудники');
+    state.employees.forEach((employee, index) => assert.equal(staff.getCell(`H${index + 5}`).value, employeeHours(state, employee.id)));
+  });
+}

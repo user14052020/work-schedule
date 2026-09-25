@@ -22,7 +22,8 @@ export async function downloadXlsx(state) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'График-Б1-сентябрь-2026.xlsx';
+  const period = state.period || state.days[0]?.date.slice(0,7);
+  link.download = `График-Б1-${period}.xlsx`;
   document.body.append(link);
   link.click();
   link.remove();

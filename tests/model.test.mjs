@@ -14,8 +14,9 @@ const column = name => JOB_FIELDS.indexOf(name);
 // The app edits a cloned candidate and commits only after validation succeeds.
 const candidateEdit = (state, edit) => { const next = clone(state); edit(next); return next; };
 
-test('baseline totals: 21.5 hours with work types and individual participation', () => {
+test('original first two shifts retain 21.5 hours with work types and individual participation', () => {
   const state = initialState();
+  state.days = state.days.slice(0, 2);
   assert.equal(monthHours(state), 21.5);
   assert.equal(calculatedHours(state.days[0]), 11);
   assert.equal(calculatedHours(state.days[1]), 10.5);
@@ -25,7 +26,6 @@ test('baseline totals: 21.5 hours with work types and individual participation',
   }
   assert.equal(dayPay(state, state.days[0]), 38500);
   assert.equal(dayPay(state, state.days[1]), 18000);
-  assert.equal(dayPay(state, state.days[2]), 1500);
 });
 
 test('automatic participation requires a work type and РД/ДЕЖ; explicit opt out survives', () => {
@@ -42,10 +42,11 @@ test('automatic participation requires a work type and РД/ДЕЖ; explicit opt
 
 test('changing a status immediately changes automatic employee hours', () => {
   const state = initialState();
+  const before = employeeHours(state, 'e2');
   state.days[1].statuses[1] = 'ДЕЖ';
-  assert.equal(employeeHours(state, 'e2'), 21.25);
+  assert.equal(employeeHours(state, 'e2'), before + 10.5);
   state.days[1].statuses[1] = 'ОТП';
-  assert.equal(employeeHours(state, 'e2'), 10.75);
+  assert.equal(employeeHours(state, 'e2'), before);
 });
 
 test('period roster replacement leaves every other day untouched and preserves unchanged roles', () => {
@@ -181,12 +182,13 @@ test('shift pay selects the correct inclusive boundary for drivers and non-drive
 
 test('manual totals support zero and clearing restores formulas; adjustment is separate', () => {
   const state = initialState(), day = state.days[0], row = day.rows[0];
+  const originalMonthHours = monthHours(state), originalTypes = typeTotals(state);
   setJobField(state, day, row, 'pay', '0'); assert.equal(dayPay(state, day), 0);
   setJobField(state, day, row, 'pay', '12345'); assert.equal(dayPay(state, day), 12345);
   setJobField(state, day, row, 'pay', ''); assert.equal(dayPay(state, day), 38500);
   setJobField(state, day, row, 'shiftHours', '0'); assert.equal(dayHours(day), 0);
-  setJobField(state, day, row, 'shiftHours', '3,5'); assert.equal(monthHours(state), 14);
-  assert.equal(Object.fromEntries(typeTotals(state))['ЧВ'], 16);
+  setJobField(state, day, row, 'shiftHours', '3,5'); assert.equal(monthHours(state), originalMonthHours - 11 + 3.5);
+  assert.deepEqual(typeTotals(state), originalTypes);
   setJobField(state, day, row, 'shiftHours', ''); assert.equal(dayHours(day), 11);
   setJobField(state, day, row, 'adjustment', '-500'); assert.equal(day.adjustment, -500);
   assert.equal(dayPay(state, day), 38500);
@@ -199,7 +201,8 @@ test('menu refuses renaming referenced or semantic codes and duplicate employee 
     assert.throws(() => change(state, kind, id, field, value));
   }
   assert.deepEqual(state, before);
-  change(state, 'workTypes', 'ЧК', 'code', 'КАН');
+  state.workTypes.push({code:'НОВЫЙ',label:'Ещё не назначенный вид'});
+  change(state, 'workTypes', 'НОВЫЙ', 'code', 'КАН');
   assert.ok(state.workTypes.some(entry => entry.code === 'КАН'));
 });
 
@@ -214,8 +217,9 @@ test('object edits update inherited values but retain manually edited job values
 
 test('inactive employees keep historic participation but cannot receive new assignments', () => {
   const state = initialState();
+  const before = employeeHours(state, 'e1');
   change(state, 'employees', 'e1', 'active', undefined, false);
-  assert.equal(employeeHours(state, 'e1'), 21.5);
+  assert.equal(employeeHours(state, 'e1'), before);
   assert.throws(() => validateRoster(state, ['e1', '', '', '', '']));
 });
 
