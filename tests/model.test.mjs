@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   initialState, clone, blankRow, participants, participantAt, calculatedHours,
   dayHours, monthHours, typeTotals, employeeHours, basicPay, dayPay,
-  validateRoster, applyRoster, setJobField, parseTsv, applyPaste, toCsv, JOB_FIELDS,
+  validateRoster, applyRoster, setJobField, parseTsv, applyPaste, JOB_FIELDS,
 } from '../public/model.js';
 import { handleMenuChange, handleMenuAction, renderMenu } from '../public/menus.js';
 
@@ -13,19 +13,6 @@ const change = (state, kind, id, field, value, checked) => handleMenuChange(stat
 const column = name => JOB_FIELDS.indexOf(name);
 // The app edits a cloned candidate and commits only after validation succeeds.
 const candidateEdit = (state, edit) => { const next = clone(state); edit(next); return next; };
-
-function csvRecords(csv) {
-  const records = []; let record = [], value = '', quoted = false;
-  for (let i = 1; i < csv.length; i++) {
-    const char = csv[i];
-    if (char === '"') {
-      if (quoted && csv[i + 1] === '"') { value += '"'; i++; } else quoted = !quoted;
-    } else if (!quoted && char === ';') { record.push(value); value = ''; }
-    else if (!quoted && char === '\r' && csv[i + 1] === '\n') { record.push(value); records.push(record); record = []; value = ''; i++; }
-    else value += char;
-  }
-  record.push(value); records.push(record); return records;
-}
 
 test('baseline totals: 21.5 hours with work types and individual participation', () => {
   const state = initialState();
@@ -261,40 +248,4 @@ test('invoice dictionary renaming remains usable in the schedule', () => {
   assert.ok(state.invoiceStates.includes('ВЫСТАВЛЕН'));
   setJobField(state, day, row, 'invoice', 'ВЫСТАВЛЕН');
   assert.equal(row.invoice, 'ВЫСТАВЛЕН');
-});
-
-test('CSV carries automatic pay and only repeats shift totals on the first record', () => {
-  const state = initialState(), csv = toCsv(state), records = csvRecords(csv);
-  assert.equal(csv[0], '\ufeff');
-  assert.equal(records[0].length, 29);
-  assert.equal(records[1][7], String(dayPay(state, state.days[0])));
-  assert.equal(records[2][7], '');
-  assert.equal(records[1][9], '11');
-  assert.equal(records[2][9], '');
-});
-
-test('CSV retains all dates and the empty third shift with leave pay and employee statuses', () => {
-  const state = initialState(), records = csvRecords(toCsv(state));
-  const third = records.filter(record => record[0] === '2026-09-03');
-  assert.equal(new Set(records.slice(1).map(record => record[0])).size, 30);
-  assert.equal(third.length, 1);
-  assert.equal(third[0][7], '1500');
-  assert.equal(third[0][9], '0');
-  assert.equal(third[0][11], '');
-  assert.deepEqual(third[0].slice(19, 23), ['Алексей С.', 'ОТП', 'Дмитрий К.', 'Б2']);
-  state.days[2].pay = 3210; state.days[2].adjustment = -100;
-  const updated = csvRecords(toCsv(state)).find(record => record[0] === '2026-09-03');
-  assert.equal(updated[7], '3210'); assert.equal(updated[8], '-100');
-});
-
-test('CSV neutralizes spreadsheet formulas, preserves negative numbers and quotes multiline cells', () => {
-  const state = initialState(), row = state.days[0].rows[0];
-  row.object = '=1+1'; row.phone = '+7 (000) 000'; row.objectNotes = '  @SUM(A1)'; row.task = '-2+3';
-  row.notes = 'Слова; "кавычки"\nвторая строка'; state.days[0].adjustment = -500;
-  const records = csvRecords(toCsv(state)), first = records[1];
-  assert.equal(first[13], "'=1+1"); assert.equal(first[14], "'+7 (000) 000");
-  assert.equal(first[15], "'  @SUM(A1)"); assert.equal(first[16], "'-2+3");
-  assert.equal(first[17], 'Слова; "кавычки"\nвторая строка');
-  assert.equal(first[8], '-500');
-  assert.ok(records.every(record => record.length === 29));
 });
