@@ -1,4 +1,4 @@
-import { employeeHours, allDays, uid } from './model.js';
+import { employeeHours, brigadeName, allDays, uid } from './model.js?v=brigades-1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const decimal = value => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value || 0);
@@ -52,7 +52,7 @@ function employeesPage(state) {
     <td class="directory-hours">${decimal(employeeHours(state,employee.id))}<span>ч</span></td>
   </tr>`);
   return `<div class="directory"><header class="directory-heading"><div><div class="directory-eyebrow">КОМАНДА</div><h1>Сотрудники</h1><p>Общий список для состава бригады и каждой смены.</p></div><div class="directory-counter"><strong>${employees.length}</strong><span>сотрудников · ${active} активных</span></div></header>
-    ${panel('Состав команды',`Часы за ${periodLabel(state)} рассчитаны по участию в работах. Изменения сохраняются после выхода из ячейки.`,table(['№','ФИ','Имя Ф.','Группа','Должность','Водитель','Активен','Часы за период'],rows,'directory-employees'),'add-employee','+ Сотрудник')}
+    ${panel('Состав команды',`Часы бригады «${brigadeName(state)}» за ${periodLabel(state)} рассчитаны по участию в работах этой бригады. Изменения сохраняются после выхода из ячейки.`,table(['№','ФИ','Имя Ф.','Группа','Должность','Водитель','Активен','Часы выбранной бригады'],rows,'directory-employees'),'add-employee','+ Сотрудник')}
     <p class="directory-footnote">В график можно назначить активных сотрудников группы «Поля». Отключение активности убирает сотрудника из новых назначений, сохраняя его историю. Это список сотрудников демо, управление доступом появится в рабочей версии.</p>
   </div>`;
 }
@@ -62,13 +62,14 @@ function codeRows(kind, entries) {
 }
 
 function dictionariesPage(state) {
+  const brigades = panel('Бригады','Для каждой бригады сохраняется отдельный график. Код и название можно менять.',table(['№','Код','Название'],(state.brigades || []).map((brigade,index)=>`<tr><td class="directory-index">${index + 1}</td><td>${input('brigades',brigade.id,'code',brigade.code,`Код бригады ${index + 1}`)}</td><td>${input('brigades',brigade.id,'label',brigade.label,`Название бригады ${index + 1}`)}</td></tr>`)),'add-brigade','+ Бригада');
   const types = panel('Виды работ','Коды используются в заданиях и статистике часов.',table(['№','Вид','Примечание'],codeRows('workTypes',state.workTypes || [])),'add-type','+ Вид работы');
   const statuses = panel('Статусы сотрудников','РД и ДЕЖ автоматически включают сотрудника в задания смены.',table(['№','Статус','Пояснение'],codeRows('statuses',state.statuses || [])),'add-status','+ Статус');
   const invoices = panel('Счёт','НЕТ — значение по умолчанию. Для переезда счёт пустой.',table(['№','Счёт'],(state.invoiceStates || ['ДА','ОК','НЕТ']).map((value,index)=>`<tr><td class="directory-index">${index + 1}</td><td>${input('invoices',index,'code',value,`Статус счёта ${index + 1}`)}</td></tr>`)));
   const positions = panel('Должности','Используются в карточках сотрудников.',table(['№','Должность','Описание','Условия'],(state.positions || []).map((position,index)=>`<tr><td class="directory-index">${index + 1}</td><td>${input('positions',position.code,'code',position.code,`Должность ${index + 1}`)}</td><td>${input('positions',position.code,'description',position.description || '',`Описание должности ${position.code}`,{multiline:true})}</td><td>${input('positions',position.code,'terms',position.terms || '',`Условия должности ${position.code}`,{multiline:true})}</td></tr>`)),'add-position','+ Должность');
   const rates = panel('Ставки за смену','Базовые ставки, ₽. Доплаты бригадиру и правила обучения в демо не рассчитываются.',table(['Часы работы','До, ч','Не водитель, ₽','Водитель, ₽'],(state.rates || []).map(rate=>`<tr><td>${input('rates',rate.id,'label',rate.label,`Период ставки ${rate.label}`)}</td><td>${input('rates',rate.id,'maxHours',rate.maxHours,`Верхняя граница часов ${rate.label}`,{type:'number',placeholder:'—'})}</td><td>${input('rates',rate.id,'nonDriver',rate.nonDriver,`Ставка не водителя ${rate.label}`,{type:'number'})}</td><td>${input('rates',rate.id,'driver',rate.driver,`Ставка водителя ${rate.label}`,{type:'number'})}</td></tr>`)));
   const objects = panel('Объекты','При выборе номера в графике подставляются объект, контакт, примечание, ТЗ и техбаза. Ручные дополнения в графике сохраняются.',table(['№ объекта','Объект','Телефон работ','Примечания по объекту','ТЗ на работы','Техбаза'],(state.objects || []).map(object=>`<tr><td>${input('objects',object.id,'id',object.id,`Номер объекта ${object.id}`)}</td><td>${input('objects',object.id,'name',object.name,`Название объекта ${object.id}`,{multiline:true})}</td><td>${input('objects',object.id,'phone',object.phone,`Телефон объекта ${object.id}`,{multiline:true})}</td><td>${input('objects',object.id,'notes',object.notes,`Примечания объекта ${object.id}`,{multiline:true})}</td><td>${input('objects',object.id,'task',object.task,`ТЗ объекта ${object.id}`,{multiline:true})}</td><td>${input('objects',object.id,'tech',object.tech,`Техбаза объекта ${object.id}`,{placeholder:'https://…'})}</td></tr>`),'directory-objects'),'add-object','+ Объект');
-  return `<div class="directory"><header class="directory-heading"><div><div class="directory-eyebrow">ОБЩИЕ ДАННЫЕ</div><h1>Справочники</h1><p>Единые значения для графика и сотрудников. Изменения сохраняются после выхода из ячейки.</p></div></header><div class="directory-grid">${types}${statuses}${invoices}</div>${positions}${rates}${objects}<p class="directory-footnote">Код или номер, который уже используется, переименовать нельзя. Пояснения можно менять. Служебные коды ПРЗД, РД, ДЕЖ, ОТП и НЕТ закреплены за правилами графика.</p></div>`;
+  return `<div class="directory"><header class="directory-heading"><div><div class="directory-eyebrow">ОБЩИЕ ДАННЫЕ</div><h1>Справочники</h1><p>Единые значения для графика и сотрудников. Изменения сохраняются после выхода из ячейки.</p></div></header>${brigades}<div class="directory-grid">${types}${statuses}${invoices}</div>${positions}${rates}${objects}<p class="directory-footnote">Код бригады можно менять. Коды видов работ, статусов, счетов, должностей и номера объектов нельзя переименовать, пока они используются. Пояснения можно менять. Служебные коды ПРЗД, РД, ДЕЖ, ОТП и НЕТ закреплены за правилами графика.</p></div>`;
 }
 
 export function renderMenu(state, view) {
@@ -89,7 +90,8 @@ function unique(entries, value, current, field, label) {
 }
 
 function employeeAssigned(state,id) {
-  return (state.roster || []).includes(id) || Object.values(state.periods || {}).some(period=>(period.roster || []).includes(id)) || allDays(state).some(day => day.roster.includes(id) || day.rows.some(row => row.people.includes(id)));
+  const schedules = [state,...Object.values(state.brigadeSchedules || {})];
+  return schedules.some(schedule=>(schedule.roster || []).includes(id) || Object.values(schedule.periods || {}).some(period=>(period.roster || []).includes(id))) || allDays(state).some(day => day.roster.includes(id) || day.rows.some(row => row.people.includes(id)));
 }
 
 function codeReferenced(state,kind,code) {
@@ -117,6 +119,15 @@ function amount(value,label,nullable = false) {
 export function handleMenuChange(state, target) {
   const { menuKind: kind, menuId: id, menuField: field } = target.dataset || {};
   if (!kind || !field) return false;
+  if (kind === 'brigades') {
+    const brigade = (state.brigades || []).find(entry=>entry.id === id);
+    if (!brigade) throw Error('Бригада не найдена.');
+    if (!['code','label'].includes(field)) throw Error('Неизвестное поле бригады.');
+    const value = clean(target.value,field === 'code' ? 'Код бригады' : 'Название бригады',true,field === 'code' ? 50 : 150);
+    if (field === 'code') unique(state.brigades,value,brigade,'code','Код бригады');
+    brigade[field] = value;
+    return true;
+  }
   if (kind === 'employees') {
     const employee = state.employees.find(entry => entry.id === id);
     if (!employee) throw Error('Сотрудник не найден.');
@@ -209,6 +220,12 @@ function nextCode(entries,prefix,field = 'code') {
 
 export function handleMenuAction(state, button) {
   const action = button.dataset?.menuAction;
+  if (action === 'add-brigade') {
+    if (!state.brigades) state.brigades = [];
+    const code = nextCode(state.brigades,'Б');
+    state.brigades.push({id:uid(),code,label:`Бригада ${code.slice(1)}`});
+    return true;
+  }
   if (action === 'add-employee') {
     state.employees.push({id:uid(),fullName:'',name:nextCode(state.employees,'Новый сотрудник ', 'name'),group:'Поля',position:'',driver:false,active:true});
     return true;

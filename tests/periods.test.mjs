@@ -10,6 +10,9 @@ function legacyState() {
   state.schema=1;
   delete state.period;
   delete state.periods;
+  delete state.brigades;
+  delete state.brigadeId;
+  delete state.brigadeSchedules;
   state.objects=state.objects.slice(0,4);
   for (let index=2;index<state.days.length;index++) {
     state.days[index]={date:`2026-09-${String(index+1).padStart(2,'0')}`,roster:['e1','e2','','',''],statuses:['РД','РД','','',''],pay:null,adjustment:null,hoursOverride:null,rows:Array.from({length:5},blankRow)};
@@ -25,7 +28,7 @@ test('August and September contain complete distinct fictional schedules with va
   assert.equal(state.days.length,30);
   assert.equal(state.periods['2026-08'].days.length,31);
   const ids=[];
-  for (const day of allDays(state)) {
+  for (const day of [...state.days,...state.periods['2026-08'].days]) {
     assert(day.rows.some(row=>row.type && row.hours>0),day.date);
     validateRoster(state,day.roster);
     assert.equal(day.statuses.length,5);
@@ -40,7 +43,7 @@ test('August and September contain complete distinct fictional schedules with va
   }
   assert.equal(new Set(ids).size,ids.length);
   assert.equal(monthHours(state),204);
-  assert.equal(allDays(state).length,61);
+  assert.equal(allDays(state).length,182);
   const sept=clone(state.days);
   switchPeriod(state,'2026-08');
   assert.equal(monthHours(state),196.5);
@@ -66,7 +69,7 @@ test('switching stores and restores independent edited periods, roster and colla
   for (const key of ['days','roster','collapsedDays','monthCollapsed']) assert.deepEqual(state[key],september[key]);
   assert(!('2026-09' in state.periods));
   assert.deepEqual(state.periods['2026-08'].days,august);
-  assert.equal(allDays(state).length,61);
+  assert.equal(allDays(state).length,182);
   const before=clone(state);
   switchPeriod(state,'2026-09');
   assert.deepEqual(state,before);
@@ -117,7 +120,7 @@ test('legacy migration fills only untouched template days and preserves all user
   legacy.collapsedDays=['2026-09-01'];legacy.monthCollapsed=true;
   const before=clone(legacy), migrated=migrateState(legacy);
   assert.deepEqual(legacy,before,'migration must not mutate the saved source');
-  assert.equal(migrated.schema,2);assert.equal(migrated.period,'2026-09');
+  assert.equal(migrated.schema,SCHEMA);assert.equal(migrated.period,'2026-09');
   for (const index of [0,1,4,5,6,7,8,9]) assert.deepEqual(migrated.days[index],before.days[index],`preserve September ${index+1}`);
   for (const index of [2,3,10,29]) assert(migrated.days[index].rows.some(row=>row.type && row.hours>0));
   assert.equal(migrated.employees[0].name,'Новое короткое имя');
@@ -128,7 +131,7 @@ test('legacy migration fills only untouched template days and preserves all user
   assert(allDays(migrated).every(day=>day.rows.every(row=>!row.objectId || migrated.objects.some(object=>object.id===row.objectId))));
 });
 
-test('schema-2 migration and reload preserve intentionally cleared seed data and inactive edits',()=>{
+test('current-schema migration and reload preserve intentionally cleared seed data and inactive edits',()=>{
   const state=initialState();
   state.days[3].rows=Array.from({length:5},blankRow);
   switchPeriod(state,'2026-08');

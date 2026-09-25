@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { initialState, clone, blankRow, dayPay, dayHours, monthHours, employeeHours, switchPeriod } from '../public/model.js';
+import { initialState, clone, blankRow, dayPay, dayHours, monthHours, employeeHours, switchPeriod, switchBrigade } from '../public/model.js';
 import { buildWorkbook } from '../public/xlsx-export.js';
+import { xlsxFilename } from '../public/download-xlsx.js';
 
 // Execute the same vendored browser bundle that the page downloads, without a DOM.
 const browserModule = { exports: {} };
@@ -109,6 +110,11 @@ test('XLSX includes employees and editable dictionaries with employee hours and 
   for (const type of baselineState.workTypes) assert.ok(dictionaryValues.includes(type.code), type.code);
   for (const status of baselineState.statuses) assert.ok(dictionaryValues.includes(status.code), status.code);
   for (const object of baselineState.objects) assert.ok(dictionaryValues.includes(object.name), object.name);
+  assert.ok(dictionaryValues.includes('Бригады'));
+  for (const brigade of baselineState.brigades) {
+    assert.ok(dictionaryValues.includes(brigade.code), brigade.code);
+    assert.ok(dictionaryValues.includes(brigade.label), brigade.label);
+  }
   assert.ok(dictionaryValues.includes(11500));
 });
 
@@ -180,3 +186,42 @@ for (const [period, dayCount, monthName, filled] of [
     state.employees.forEach((employee, index) => assert.equal(staff.getCell(`H${index + 5}`).value, employeeHours(state, employee.id)));
   });
 }
+
+test('XLSX and download name identify selected brigade with only its schedule and employee hours', async () => {
+  const state = initialState();
+  state.days[0].rows[0].notes = 'Работа только первой бригады';
+  switchBrigade(state, 'b2');
+  state.days[0].rows[0].notes = 'Работа только второй бригады';
+  const { workbook } = await roundTrip(state);
+  const sheet = workbook.getWorksheet('Б2 + Бригадир + Осн Напарник');
+  assert.ok(sheet);
+  assert.equal(workbook.getWorksheet(SCHEDULE_NAME), undefined);
+  assert.equal(xlsxFilename(state), `График-Б2-${state.period}.xlsx`);
+  assert.match(workbook.title, /^График Б2 — /);
+  assert.match(sheet.getCell('K1').value, /^Б2 · /);
+  assert.equal(sheet.getCell('J1').value, monthHours(state));
+  const values = allCellValues(sheet);
+  assert.ok(values.includes('Работа только второй бригады'));
+  assert.ok(!values.includes('Работа только первой бригады'));
+  const staff = workbook.getWorksheet('Сотрудники');
+  assert.match(staff.getCell('A2').value, /бригад[аы] «Б2»/i);
+  assert.match(staff.getCell('A2').value, /2026/);
+  assert.equal(staff.getCell('H4').value, 'Часы выбранной бригады');
+  state.employees.forEach((employee,index)=>assert.equal(staff.getCell(`H${index+5}`).value,employeeHours(state,employee.id)));
+  const dictionaryValues = allCellValues(workbook.getWorksheet('Справочники'));
+  for (const brigade of state.brigades) assert.ok(dictionaryValues.includes(brigade.code));
+});
+
+test('renamed brigade codes survive export while worksheet and file names remain valid', async () => {
+  const state = sourceExample();
+  const code = "'/Выезд:№2?[Москва]*\\";
+  state.brigades.find(brigade=>brigade.id === state.brigadeId).code = code;
+  const { workbook } = await roundTrip(state);
+  const sheet = workbook.worksheets[0];
+  assert.ok(sheet.name.length <= 31);
+  assert.doesNotMatch(sheet.name, /[\\/*?:\[\]]|^'|'$/);
+  assert.doesNotMatch(xlsxFilename(state), /[<>:"/\\|?*\u0000-\u001F]/);
+  assert.ok(workbook.title.includes(code));
+  assert.ok(sheet.getCell('K1').value.startsWith(`${code} · `));
+  assert.ok(allCellValues(workbook.getWorksheet('Справочники')).includes(code));
+});

@@ -248,7 +248,7 @@ test('new menu records have unique stable identifiers and escaped rendered value
 
 test('invoice dictionary renaming remains usable in the schedule', () => {
   const state = initialState(), day = state.days[0], row = day.rows[0];
-  change(state, 'invoices', 0, 'code', 'ВЫСТАВЛЕН');
+  change(state, 'invoices', 1, 'code', 'ВЫСТАВЛЕН');
   assert.ok(state.invoiceStates.includes('ВЫСТАВЛЕН'));
   setJobField(state, day, row, 'invoice', 'ВЫСТАВЛЕН');
   assert.equal(row.invoice, 'ВЫСТАВЛЕН');

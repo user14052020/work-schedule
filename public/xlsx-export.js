@@ -1,4 +1,4 @@
-import { employeeName, employeeHours, participantAt, dayHours, dayPay, monthHours, typeTotals } from './model.js';
+import { employeeName, employeeHours, brigadeName, participantAt, dayHours, dayPay, monthHours, typeTotals } from './model.js?v=brigades-1';
 
 const COLORS = {
   month: 'FF9FC5E8', lead: 'FF93C47D', partner: 'FFB4A7D6', extra: 'FFF9CB9C',
@@ -46,6 +46,11 @@ function periodDate(state, fallbackDate) {
   return state.days.length ? utcDate(state.days[0].date) : fallbackDate;
 }
 
+function scheduleName(state) {
+  const name = `${brigadeName(state)} + Бригадир + Осн Напарник`.replace(/[\\/*?:\[\]\u0000-\u001F]/g,' ').trim().replace(/^'+|'+$/g,'').slice(0,31).trim().replace(/'+$/g,'');
+  return ['сотрудники','справочники'].includes(name.toLocaleLowerCase('ru-RU')) ? `График ${name}` : name || 'График';
+}
+
 function numeric(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -80,7 +85,8 @@ function baseSheet(workbook, name, widths, color = COLORS.month) {
 
 function addSchedule(workbook, state, exportedAt) {
   const widths = [5,10,17,17,17,21,10,14,16,12,12,11,12,31,27,41,49,39,33];
-  const sheet = baseSheet(workbook,'Б1 + Бригадир + Осн Напарник',widths);
+  const brigade = brigadeName(state);
+  const sheet = baseSheet(workbook,scheduleName(state),widths);
   sheet.views = [{state: 'frozen', xSplit: 2, ySplit: 2, topLeftCell: 'C3', activeCell: 'C3', showGridLines: false, zoomScale: 85}];
   sheet.properties.outlineLevelRow = 1;
   sheet.properties.outlineProperties = {summaryBelow: false, summaryRight: false};
@@ -92,9 +98,9 @@ function addSchedule(workbook, state, exportedAt) {
   merge(sheet,1,1,2,2,month,headerStyle);
   ROLE_LABELS.forEach((label,index)=>write(sheet,1,index+3,label,{fill:ROLE_COLORS[index],bold:true,align:'center'}));
   roleValues(state,state.roster).forEach((name,index)=>write(sheet,2,index+3,name,{fill:ROLE_COLORS[index],align:'center'}));
-  merge(sheet,1,7,2,9,'Бригада: часов за месяц',headerStyle);
+  merge(sheet,1,7,2,9,`${brigade}: часов за месяц`,headerStyle);
   merge(sheet,1,10,2,10,numeric(monthHours(state)),{...headerStyle,size:13,numFmt:'0.00'});
-  merge(sheet,1,11,1,19,`Б1 · ${period}`,{...headerStyle,size:14});
+  merge(sheet,1,11,1,19,`${brigade} · ${period}`,{...headerStyle,size:14});
   const timestamp = new Intl.DateTimeFormat('ru-RU',{dateStyle:'short',timeStyle:'short'}).format(exportedAt);
   merge(sheet,2,11,2,19,`Снимок данных на ${timestamp}. Значения сохраняются без формул. ${PAY_NOTE}`,{fill:COLORS.month,size:10});
   sheet.getRow(1).height = 30;
@@ -111,7 +117,7 @@ function addSchedule(workbook, state, exportedAt) {
     monthCell.alignment = {...monthCell.alignment,textRotation:90};
     write(sheet,dateRow,2,'ДАТА',{fill:dayFill,bold:true,align:'right',size:9});
     merge(sheet,dateRow,3,dateRow,6,utcDate(day.date),{fill:dayFill,bold:true,align:'center',numFmt:'dd.mm.yyyy'});
-    merge(sheet,dateRow,7,dateRow,19,`Б1 · ${new Intl.DateTimeFormat('ru-RU',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).format(utcDate(day.date))}`,{fill:dayFill,bold:true,size:11});
+    merge(sheet,dateRow,7,dateRow,19,`${brigade} · ${new Intl.DateTimeFormat('ru-RU',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}).format(utcDate(day.date))}`,{fill:dayFill,bold:true,size:11});
     write(sheet,weekdayRow,2,'ДЕНЬ',{bold:true,align:'right',size:9});
     merge(sheet,weekdayRow,3,weekdayRow,6,new Intl.DateTimeFormat('ru-RU',{weekday:'long',timeZone:'UTC'}).format(utcDate(day.date)).toLocaleUpperCase('ru-RU'),{bold:true,align:'center'});
     write(sheet,rosterRow,2,'СМЕНА',{bold:true,align:'right',size:9});
@@ -189,11 +195,13 @@ function addEmployees(workbook,state) {
   const sheet = baseSheet(workbook,'Сотрудники',[7,31,23,14,23,13,13,20],COLORS.lead);
   sheet.views = [{state:'frozen',xSplit:2,ySplit:4,topLeftCell:'C5',showGridLines:false}];
   merge(sheet,1,1,1,8,'Сотрудники',{fill:COLORS.month,bold:true,size:16});
-  merge(sheet,2,1,2,8,'Снимок сотрудников и их часов по участию в заданиях за выбранный месяц. Отключённые сотрудники сохраняются в истории.',{color:COLORS.muted,size:10});
+  const period = new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(periodDate(state,new Date()));
+  merge(sheet,2,1,2,8,`Часы бригады «${brigadeName(state)}» за ${period} по участию в её заданиях. Отключённые сотрудники сохраняются в истории.`,{color:COLORS.muted,size:10});
   sheet.getRow(1).height = 29;
   sheet.getRow(2).height = 32;
-  const headers = ['№','ФИ','Имя Ф.','Группа','Должность','Водитель','Активен','Часы за период'];
+  const headers = ['№','ФИ','Имя Ф.','Группа','Должность','Водитель','Активен','Часы выбранной бригады'];
   headers.forEach((header,index)=>write(sheet,4,index+1,header,{fill:COLORS.header,bold:true}));
+  sheet.getRow(4).height = 32;
   state.employees.forEach((employee,index)=>{
     const values = [index+1,employee.fullName || '',employee.name,employee.group,employee.position || '',employee.driver ? 'ДА' : 'НЕТ',employee.active ? 'ДА' : 'НЕТ',numeric(employeeHours(state,employee.id))];
     values.forEach((value,column)=>write(sheet,index+5,column+1,value,{fill:index%2 ? 'FFF5F8F4' : COLORS.white, numFmt:column === 7 ? '0.00' : undefined,align:[0,5,6,7].includes(column) ? 'center' : 'left',color:employee.active ? COLORS.ink : COLORS.muted}));
@@ -212,6 +220,7 @@ function addDictionaries(workbook,state) {
   sheet.getRow(1).height = 29;
   sheet.getRow(2).height = 32;
   let cursor = 4;
+  cursor = sectionTable(sheet,cursor,'Бригады',['№','Код','Название'],state.brigades.map((brigade,index)=>[index+1,brigade.code,brigade.label]));
   cursor = sectionTable(sheet,cursor,'Виды работ',['№','ВИД','ПРИМЕЧАНИЕ'],state.workTypes.map((type,index)=>[index+1,type.code,type.label]));
   cursor = sectionTable(sheet,cursor,'Статусы',['№','СТАТУС','Пояснения'],state.statuses.map((status,index)=>[index+1,status.code,status.label]));
   cursor = sectionTable(sheet,cursor,'Счёт',['№','СЧЁТ'],state.invoiceStates.map((invoice,index)=>[index+1,invoice]));
@@ -229,7 +238,7 @@ export function buildWorkbook(state, ExcelJS) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'График бригады';
   const period = new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(periodDate(state,exportedAt));
-  workbook.title = `График бригады — ${period}`;
+  workbook.title = `График ${brigadeName(state)} — ${period}`;
   workbook.subject = 'График, сотрудники и справочники';
   workbook.description = 'Снимок значений из демонстрационной учётной системы. Базовая зарплата предварительная.';
   workbook.created = exportedAt;

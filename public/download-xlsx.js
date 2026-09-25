@@ -1,3 +1,5 @@
+import { brigadeName } from './model.js?v=brigades-1';
+
 let excelPromise;
 
 function loadExcel() {
@@ -14,16 +16,20 @@ function loadExcel() {
   return excelPromise;
 }
 
+export function xlsxFilename(state) {
+  const period = state.period || state.days[0]?.date.slice(0,7) || '';
+  return `График-${brigadeName(state)}-${period}.xlsx`.replace(/[<>:"/\\|?*\u0000-\u001F]/g,'-');
+}
+
 export async function downloadXlsx(state) {
-  const [ExcelJS, { buildWorkbook }] = await Promise.all([loadExcel(), import('./xlsx-export.js')]);
+  const [ExcelJS, { buildWorkbook }] = await Promise.all([loadExcel(), import('./xlsx-export.js?v=brigades-1')]);
   const workbook = buildWorkbook(state, ExcelJS);
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  const period = state.period || state.days[0]?.date.slice(0,7);
-  link.download = `График-Б1-${period}.xlsx`;
+  link.download = xlsxFilename(state);
   document.body.append(link);
   link.click();
   link.remove();
