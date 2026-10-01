@@ -1,3 +1,4 @@
+import './runtime.js';
 import {ApiError,SESSION_KEY,IDLE_SECONDS,clone,uid,now,today,ensure,publicUser,loadDatabase,saveDatabase,cleanup,releaseUserLocks,audit,schedule,findDay,yearRecord,assertOpen,periodDates,validDate,versionCheck} from './database.js';
 import {decorate,personalDay,participants,calculate} from './calculations.js';
 
