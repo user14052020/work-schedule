@@ -1,0 +1,40 @@
+.vacations-view{padding-bottom:16px}
+.vacation-toolbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:14px;font-size:12px}
+.vacation-toolbar label{display:flex;align-items:center;gap:8px}
+.vacation-toolbar select{max-width:270px;font-size:12px}
+.vacation-year{display:flex;align-items:center;gap:6px}
+.vacation-year .button{font-size:22px;min-width:34px;padding:3px 8px}
+.vacation-year select{min-width:90px}
+.vacation-view-switch{display:flex;background:#e8eeea;border:1px solid var(--line);border-radius:7px;padding:3px;margin-left:auto}
+.vacation-view-switch button{background:transparent;color:#6f8577;font-size:12px;border-radius:4px;padding:7px 11px}
+.vacation-view-switch button[aria-pressed=true]{background:#fff;color:#214d37;box-shadow:0 1px 4px #244e3a18;font-weight:650}
+.vacation-caption{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;color:#718477;font-size:11px;margin:0 0 11px;line-height:1.6}
+.vacation-legend{display:inline-block;width:18px;height:11px;background:#b6d7a8;border:1px solid #99c18a;border-radius:3px;vertical-align:-1px;margin-right:7px}
+.vacation-calendar-scroll{overflow:auto;border:1px solid #d2ded5;border-radius:8px;background:white;max-height:72vh;scrollbar-color:#bbcdc1 #f0f4f1;scrollbar-width:thin}
+.vacation-calendar{min-width:1020px}
+.vacation-day-header,.vacation-month{display:grid;grid-template-columns:116px repeat(31,minmax(28px,1fr))}
+.vacation-day-header{position:sticky;top:0;z-index:5;background:#edf3ee;color:#5b7563;font-weight:650;font-size:11px;min-height:32px}
+.vacation-day-header>div{display:flex;align-items:center;justify-content:center;border-right:1px solid #dce5df;border-bottom:1px solid #cedbd2}
+.vacation-day-header .vacation-corner{position:sticky;left:0;z-index:6;background:#e2ece5;font-size:14px;justify-content:flex-start;padding-left:12px}
+.vacation-month{position:relative;grid-auto-rows:minmax(32px,auto);border-bottom:2px solid #cbdad0}
+.vacation-month:last-child{border-bottom:0}
+.vacation-month-name{position:sticky;left:0;z-index:3;grid-column:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:10px 10px 10px 12px;background:#f0f5f1;border-right:1px solid #cbdad0;min-height:64px}
+.vacation-month:nth-child(odd) .vacation-month-name{background:#e9f1eb}
+.vacation-month-name strong{font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.vacation-month-name small{font-size:9px;color:#7c9283;margin-top:4px}
+.vacation-month-name .text-button{position:absolute;right:5px;bottom:4px;padding:1px 4px;min-height:23px;min-width:23px;font-size:16px;line-height:1}
+.vacation-weekday,.vacation-grid-cell{border-right:1px solid #e4ebe6;border-bottom:1px solid #e6ece7;background:#fff;min-width:0}
+.vacation-weekday{display:flex;align-items:center;justify-content:center;color:#9aa99f;font-size:8px;font-weight:500;min-height:24px}
+.vacation-grid-cell{min-height:34px}
+.vacation-weekday.weekend,.vacation-grid-cell.weekend{background:#f1f5f2;color:#6e8676}
+.vacation-weekday.invalid,.vacation-grid-cell.invalid{background:repeating-linear-gradient(135deg,#edf1ee,#edf1ee 3px,#f7f9f7 3px,#f7f9f7 6px)}
+.vacation-weekday.today{color:#165c35;font-weight:800;background:#d9ecd8}
+.vacation-grid-cell.today{box-shadow:inset 0 0 0 1px #8aba94;background:#f2f9f0}
+.vacation-bar{z-index:1;display:flex;align-items:center;gap:3px;min-width:0;min-height:28px;margin:3px 1px 3px 0;padding:5px 5px;border:1px solid #8fbd7c;background:#b6d7a8;border-radius:4px;color:#294e32;font-size:10px;font-weight:600;line-height:1.35;text-align:center}
+.vacation-bar:hover{background:#a4cc92;border-color:#629750;box-shadow:0 2px 5px #456f3024}
+.vacation-bar-name{display:block;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vacation-bar.continues-before{border-left-style:dashed;border-top-left-radius:0;border-bottom-left-radius:0}
+.vacation-bar.continues-after{border-right-style:dashed;border-top-right-radius:0;border-bottom-right-radius:0}
+.vacation-no-events{z-index:1;pointer-events:none;font-size:10px;color:#a0b0a4;align-self:center;margin-left:12px}
+.vacation-footnote{font-size:10px;line-height:1.6;color:#879a8d;margin:10px 0}
+@media(max-width:740px){.vacation-toolbar{gap:10px}.vacation-toolbar>label{width:100%}.vacation-toolbar>label select{flex:1;max-width:none}.vacation-view-switch{margin-left:0}.vacation-caption{font-size:10px}.vacation-calendar-scroll{max-height:67vh}.vacation-day-header,.vacation-month{grid-template-columns:100px repeat(31,minmax(28px,1fr))}.vacation-calendar{min-width:970px}.vacation-month-name{padding-left:8px}.vacation-month-name strong{font-size:10px}}
