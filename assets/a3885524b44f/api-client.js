@@ -322,6 +322,10 @@ function dispatch(db,path,params,method,data) {
   }
   if (path === '/settings' && method === 'PUT') {
     admin(user); const before = clone(db.settings);
+    if (Object.hasOwn(data,'showEmployeePayImmediately')) {
+      ensure(typeof data.showEmployeePayImmediately === 'boolean','Укажите, показывать ли зарплату сразу.');
+      db.settings.showEmployeePayImmediately = data.showEmployeePayImmediately;
+    }
     for (const key of ['shiftHelp','usageHelp']) if (Object.hasOwn(data,key)) db.settings[key] = String(data[key]);
     audit(db,user,'settings_updated','settings','help',before,db.settings); return clone(db.settings);
   }

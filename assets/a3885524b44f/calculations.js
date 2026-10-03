@@ -127,8 +127,8 @@ export function personalDay(db,source,employeeId) {
   const ownPay = day.calculated.employees.find(entry => entry.employeeId === employeeId);
   if (!rows.length && !ownStatus && !ownPay?.teachingOnly) return null;
   const names = ids => ids.map(id => { const employee = byId(db.references.employees,id); return employee?.shortName || employee?.name || ''; });
-  const colleague = slot === 0 ? 1 : 0,financeVisible = Date.parse(`${today()}T00:00:00Z`) >= Date.parse(`${day.date}T00:00:00Z`)+3*86400000;
-  const result = {...day,rows:rows.map(row => ({...row,people:row.resolvedPeople,peopleNames:names(row.resolvedPeople)})),
+  const colleague = slot === 0 ? 1 : 0,financeVisible = db.settings.showEmployeePayImmediately === true || Date.parse(`${today()}T00:00:00Z`) >= Date.parse(`${day.date}T00:00:00Z`)+3*86400000;
+  const result = {...day,rows:rows.map(({invoice,...row}) => ({...row,people:row.resolvedPeople,peopleNames:names(row.resolvedPeople)})),
     ownRosterSlot:slot < 0 ? null : slot,shiftColleagueId:day.roster[colleague],shiftColleagueName:names(day.roster)[colleague],shiftColleagueStatus:day.statuses[colleague],
     shiftLeadId:day.roster[0],shiftLeadName:names(day.roster)[0],rosterNames:names(day.roster),hours:round(rows.reduce((sum,row) => sum+Number(row.hours || 0),0)),financeVisible};
   delete result.pay; delete result.adjustment; delete result.calculated; delete result.employeeAdjustments;

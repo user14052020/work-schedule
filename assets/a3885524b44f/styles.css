@@ -91,6 +91,10 @@
 .personal-schedule-table .job-row .personal-person{vertical-align:middle}
 .personal-schedule-table .personal-roster-name{padding:10px 5px;min-height:38px;font-size:10px;overflow-wrap:anywhere}
 .personal-schedule-table .personal-roster-status{background:#fff;border-top:1px solid #d7e1d9;padding:6px 5px;min-height:27px;font-size:10px;font-weight:600}
+.personal-overview .personal-employee{flex:1 1 180px}
+.personal-overview .personal-pay-total{flex:1 1 180px}
+.personal-pay-total small{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:4px}
+.personal-pay-total small[hidden]{display:none}
 
 /* Every ordinary cell exposes the same column resize boundary. */
 .schedule-table .shift-row>td,.schedule-table .job-row>td:not(.time){position:relative}

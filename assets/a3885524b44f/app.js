@@ -25,9 +25,11 @@ const accountToggle = document.querySelector('#account-toggle');
 const accountMenu = document.querySelector('#account-menu');
 const navigation = [
   ['schedule','График бригады',['admin','office']], ['personal','Личный график',['field']],
+  ['employeeSchedule','График сотрудника',['admin']],
   ['dictionaries','Справочники',['admin','office']],
   ['search','Поиск',['admin','office']], ['vacations','Отпуска',['admin','office','field']],
-  ['archive','Архив',['admin','office']], ['audit','Журнал действий',['admin','office']], ['settings','Пояснения',['admin']]
+  ['archive','Архив',['admin','office']], ['audit','Журнал действий',['admin','office']], ['settings','Пояснения',['admin']],
+  ['preferences','Настройки',['admin']]
 ];
 
 function updateInteraction() {
@@ -126,9 +128,9 @@ async function navigate(view) {
     if (currentView) await currentView.dispose();
     if (!state.user || expiring) return;
     document.body.classList.remove('graph-only'); state.view = view;
-    workspace.classList.toggle('schedule-workspace',['schedule','personal'].includes(view));
+    workspace.classList.toggle('schedule-workspace',['schedule','personal','employeeSchedule'].includes(view));
     document.querySelectorAll('[data-view]').forEach(button => { button.classList.toggle('active',button.dataset.view === view); if (button.dataset.view === view) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current'); });
-    const views = {schedule:() => new ScheduleView(workspace),personal:() => new ScheduleView(workspace,{personal:true}),dictionaries:() => new DirectoriesView(workspace),search:() => new SearchView(workspace),vacations:() => new VacationsView(workspace),archive:() => new SettingsView(workspace,{archive:true}),settings:() => new SettingsView(workspace),audit:() => new AuditView(workspace)};
+    const views = {schedule:() => new ScheduleView(workspace),personal:() => new ScheduleView(workspace,{personal:true}),employeeSchedule:() => new ScheduleView(workspace,{personal:true,preview:true}),dictionaries:() => new DirectoriesView(workspace),search:() => new SearchView(workspace),vacations:() => new VacationsView(workspace),archive:() => new SettingsView(workspace,{archive:true}),settings:() => new SettingsView(workspace),preferences:() => new SettingsView(workspace,{preferences:true}),audit:() => new AuditView(workspace)};
     currentView = views[view](); await currentView.mount();
   } catch(error) { if (error.name !== 'AbortError' && state.user) showError(error); } finally { navigating = false; updateInteraction(); }
 }

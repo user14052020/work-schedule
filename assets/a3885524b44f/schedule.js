@@ -24,10 +24,13 @@ const slotLabels = ['Бригадир', 'Осн. напарник', 'Доп. н�
 const graphModeIcon = (active = false) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${active ? 'M20 4l-7 7m0-6v6h6M4 20l7-7m-6 0h6v6' : 'M14 4h6v6M20 4l-7 7M4 14v6h6M4 20l7-7'}"/></svg>`;
 
 export class ScheduleView {
-  constructor(container, {personal = false} = {}) {
-    this.container = container; this.personal = personal || !state.editable; this.closed = false; this.days = []; this.expanded = new Set([state.currentDate]);
-    this.employeeId = this.personal ? state.user.employeeId || state.references.employees?.find(row => row.active !== false)?.id : undefined;
-    this.columns = this.personal ? columns.filter(column => !['extra1','extra2'].includes(column.key)).map(column => ['lead','partner'].includes(column.key) ? {...column,label:column.key === 'lead' ? 'Сотрудник' : 'Коллеги'} : column) : columns;
+  constructor(container, {personal = false, preview = false} = {}) {
+    this.preview = Boolean(preview && state.admin);
+    this.container = container; this.personal = personal || this.preview || !state.editable; this.closed = false; this.days = []; this.expanded = new Set([state.currentDate]);
+    this.employeeId = this.personal ? this.preview
+      ? this.previewEmployees.find(employee => String(employee.id) === String(state.user.employeeId))?.id || this.previewEmployees[0]?.id || ''
+      : state.user.employeeId || '' : undefined;
+    this.columns = this.personal ? columns.filter(column => !['extra1','extra2','invoice'].includes(column.key)).map(column => ['lead','partner'].includes(column.key) ? {...column,label:column.key === 'lead' ? 'Сотрудник' : 'Коллеги'} : column) : columns;
     this.visible = this.columns.filter(column => !column.hidden || state.preference(`column.${column.key}`));
     this.calendar = null; this.disposed = false; this.editingTransition = false; this.editNotice = '';
     this.disposing = false; this.lifecycle = new ViewLifecycle(); this.rosterDraft = new RosterDraft();
@@ -38,6 +41,10 @@ export class ScheduleView {
     window.addEventListener('beforeunload', this.onUnload);
     window.addEventListener('pagehide',this.onPageHide);
     window.addEventListener('pageshow',this.onPageShow);
+  }
+  get previewEmployees() {
+    return (state.references.employees || []).filter(employee => ['Поля','field'].includes(employee.group))
+      .sort((left,right) => Number(left.active === false) - Number(right.active === false));
   }
   async mount() { await this.load(); }
   async load() {
@@ -59,6 +66,7 @@ export class ScheduleView {
     } catch (error) { if (request.current() && error.name !== 'AbortError') { this.loadFailed = true; failure(this.container,error,() => this.load()); } return false; }
   }
   readSchedule(options) {
+    if (this.personal && !this.employeeId) return Promise.resolve({days:[],closed:false});
     const route = this.personal ? `/personal?${query({period:state.period,employeeId:this.employeeId})}` : `/schedules?${query({period:state.period,brigadeId:state.brigadeId})}`;
     return api.get(route,options);
   }
@@ -132,7 +140,7 @@ export class ScheduleView {
       button.disabled = Boolean(this.editingTransition || this.calendar?.requesting || !this.calendar?.known || (this.calendar?.lock && !this.calendar.lock.mine));
       button.classList.toggle('editing-active',Boolean(this.calendar?.active));
     }
-    this.container.querySelectorAll('[data-month],[data-year],[data-brigade],[data-personal-employee],[data-open-brigade]').forEach(control => { control.disabled = this.editingTransition; });
+    this.container.querySelectorAll('[data-month],[data-year],[data-brigade],[data-personal-employee],[data-open-brigade]').forEach(control => { control.disabled = this.editingTransition || (control.hasAttribute('data-personal-employee') && !this.previewEmployees.length); });
     const target = this.container.querySelector('[data-edit-status]');
     if (target) {
       const lock = this.calendar?.lock;
@@ -196,19 +204,23 @@ export class ScheduleView {
     const previousScroll = this.container.querySelector('.table-scroll');
     const scrollPosition = {top:previousScroll?.scrollTop || 0,left:previousScroll?.scrollLeft || 0};
     const years = [...new Set([...state.years.map(row => Number(row.year || row)), Number(state.period.slice(0,4)), Number(state.currentDate.slice(0,4))])].sort((a,b) => b-a);
-    const employeeOptions = selectedId => options(state.references.employees?.filter(row => row.active !== false && (this.personal || ['Поля','field'].includes(row.group))),selectedId,{label:'shortName'});
+    const employeeOptions = selectedId => options(state.references.employees?.filter(row => row.active !== false && ['Поля','field'].includes(row.group)),selectedId,{label:'shortName'});
+    const personalEmployee = this.preview
+      ? `<div class="personal-employee"><label class="overline" for="personal-employee">СОТРУДНИК</label><select id="personal-employee" data-personal-employee ${this.previewEmployees.length ? '' : 'disabled'}>${this.previewEmployees.length ? this.previewEmployees.map(employee => option(employee.id,`${employee.shortName || employee.name || employee.id}${employee.active === false ? ' (неактивен)' : ''}`,this.employeeId)).join('') : '<option value="">Нет сотрудников</option>'}</select></div>`
+      : `<div class="personal-employee"><span class="overline">СОТРУДНИК</span><strong>${escape(state.user.name)}</strong></div>`;
+    const emptyPersonalMessage = !this.employeeId ? this.preview ? 'В справочнике нет сотрудников со статусом «Поля».' : 'У пользователя не указан сотрудник.' : 'В выбранном месяце работы не назначены.';
     this.container.innerHTML = `
-      <div class="schedule-top"><div class="page-heading"><div><h1>${this.personal ? 'Личный график' : 'График бригады'} ${this.closed ? '<span class="badge">Период закрыт</span>' : ''}</h1></div>${state.editable ? `<div class="heading-actions">${this.canEdit ? '<button class="primary calendar-edit-button" data-edit-mode disabled>Начать редактирование</button>' : ''}<button class="button" data-export>↓ Экспорт XLSX</button><button class="button" data-search>⌕ Поиск</button></div>` : ''}</div>
+      <div class="schedule-top"><div class="page-heading"><div><h1>${this.preview ? 'График сотрудника' : this.personal ? 'Личный график' : 'График бригады'} ${this.closed ? '<span class="badge">Период закрыт</span>' : ''}</h1></div>${state.editable && !this.personal ? `<div class="heading-actions">${this.canEdit ? '<button class="primary calendar-edit-button" data-edit-mode disabled>Начать редактирование</button>' : ''}<button class="button" data-export>↓ Экспорт XLSX</button><button class="button" data-search>⌕ Поиск</button></div>` : ''}</div>
       ${this.canEdit ? '<div class="calendar-edit-status" data-edit-status role="status"></div>' : ''}
       ${this.personal ? '' : '<div class="brigade-summary" data-summary aria-label="Составы бригад за последние три дня"></div>'}
-      <section class="overview"><div class="period"><span class="overline">ПЕРИОД</span><div class="period-selectors"><select data-month aria-label="Месяц">${monthNames.map((label,index) => option(String(index+1).padStart(2,'0'),label,state.period.slice(5))).join('')}</select><select data-year aria-label="Год">${years.map(year => option(year,year,state.period.slice(0,4))).join('')}</select></div></div>
-      ${this.personal ? (state.editable ? `<div><label class="overline">СОТРУДНИК</label><select data-personal-employee>${employeeOptions(this.employeeId || state.user.employeeId)}</select></div>` : `<div><span class="overline">СОТРУДНИК</span><strong>${escape(state.user.name)}</strong></div>`) : `<div class="brigade"><label class="overline">БРИГАДА</label><select data-brigade aria-label="Бригада">${options(state.references.brigades,state.brigadeId,{empty:null,label:'code'})}</select></div>${[0,1,2,3].map(slot => `<div class="person ${slot === 0 ? 'lead' : slot === 1 ? 'partner' : 'extra'}"><label class="overline">${escape(slotLabels[slot])}</label><select data-roster="${slot}" ${this.editable ? '' : 'disabled'}>${slot === 0 ? this.rosterOptions(slot,this.roster[slot]) : employeeOptions(this.roster[slot])}</select>${slot === 3 ? `<select data-roster="4" aria-label="Дополнительный сотрудник" ${this.editable ? '' : 'disabled'}>${employeeOptions(this.roster[4])}</select>` : ''}</div>`).join('')}`}
-      <div class="overview-total"><span class="overline">ЧАСОВ ЗА МЕСЯЦ</span><strong data-month-hours>—</strong></div>${this.editable ? '<div class="overview-action"><button class="primary" data-apply-roster title="Заполнить состав только в пустых сменах выбранного месяца">Заполнить</button></div>' : ''}</section>
+      <section class="overview ${this.personal ? 'personal-overview' : ''}"><div class="period"><span class="overline">ПЕРИОД</span><div class="period-selectors"><select data-month aria-label="Месяц">${monthNames.map((label,index) => option(String(index+1).padStart(2,'0'),label,state.period.slice(5))).join('')}</select><select data-year aria-label="Год">${years.map(year => option(year,year,state.period.slice(0,4))).join('')}</select></div></div>
+      ${this.personal ? personalEmployee : `<div class="brigade"><label class="overline">БРИГАДА</label><select data-brigade aria-label="Бригада">${options(state.references.brigades,state.brigadeId,{empty:null,label:'code'})}</select></div>${[0,1,2,3].map(slot => `<div class="person ${slot === 0 ? 'lead' : slot === 1 ? 'partner' : 'extra'}"><label class="overline">${escape(slotLabels[slot])}</label><select data-roster="${slot}" ${this.editable ? '' : 'disabled'}>${slot === 0 ? this.rosterOptions(slot,this.roster[slot]) : employeeOptions(this.roster[slot])}</select>${slot === 3 ? `<select data-roster="4" aria-label="Дополнительный сотрудник" ${this.editable ? '' : 'disabled'}>${employeeOptions(this.roster[4])}</select>` : ''}</div>`).join('')}`}
+      <div class="overview-total"><span class="overline">ЧАСОВ ЗА МЕСЯЦ</span><strong data-month-hours>—</strong></div>${this.personal ? '<div class="overview-total personal-pay-total"><span class="overline">ЗП ЗА МЕСЯЦ</span><strong data-month-pay>—</strong><small data-month-pay-note></small></div>' : ''}${this.editable ? '<div class="overview-action"><button class="primary" data-apply-roster title="Заполнить состав только в пустых сменах выбранного месяца">Заполнить</button></div>' : ''}</section>
       </div>
       <section class="sheet-panel"><div class="sheet-toolbar"><strong>${this.personal ? 'Мои работы' : escape(state.brigadeName(state.brigadeId)) + ' · Календарь работ'}</strong><div class="sheet-controls"><button class="text-button" data-expand>Развернуть дни</button><button class="text-button" data-collapse>Свернуть дни</button>${this.editable ? '<button class="text-button" data-save>Сохранить</button>' : ''}<button class="text-button" data-reload>Обновить</button><button class="button graph-mode-button" type="button" data-fullscreen aria-label="Только график" title="Только график">${graphModeIcon()}</button></div></div>
       <div class="column-options"><span>Столбцы:</span>${this.columns.filter(column => column.hidden).map(column => `<label><input type="checkbox" data-column="${column.key}" ${this.visible.some(item => item.key === column.key) ? 'checked' : ''}>${escape(column.label)}</label>`).join('')}</div>
       ${this.personal ? '' : `<div class="sheet-hint">${escape(state.settings.shiftHelp || 'Состав смены можно изменить. В работу подставляются сотрудники с рабочими статусами.')} ${this.closed ? '<strong>Редактирование закрытого периода недоступно.</strong>' : ''}</div>`}
-      <div class="table-scroll"><table class="schedule-table ${this.personal ? 'personal-schedule-table' : ''}"><colgroup>${this.visible.map(column => `<col data-width="${column.key}" style="width:${this.columnWidth(column)}px">`).join('')}</colgroup><thead><tr>${this.visible.map(column => `<th class="${column.key} ${this.personalCellClass(null,column.key)}" data-heading="${column.key}" aria-label="${escape(column.accessibleLabel || column.label)}">${escape(column.label)}<span class="column-resizer" data-resize="${column.key}" title="Изменить ширину столбца" tabindex="0" role="separator" aria-label="Ширина столбца ${escape(column.accessibleLabel || column.label)}" aria-orientation="vertical" aria-valuemin="45" aria-valuemax="800" aria-valuenow="${this.columnWidth(column)}"></span></th>`).join('')}</tr></thead><tbody>${this.days.map(day => this.dayHtml(day)).join('')}</tbody></table></div>
+      <div class="table-scroll"><table class="schedule-table ${this.personal ? 'personal-schedule-table' : ''}"><colgroup>${this.visible.map(column => `<col data-width="${column.key}" style="width:${this.columnWidth(column)}px">`).join('')}</colgroup><thead><tr>${this.visible.map(column => `<th class="${column.key} ${this.personalCellClass(null,column.key)}" data-heading="${column.key}" aria-label="${escape(column.accessibleLabel || column.label)}">${escape(column.label)}<span class="column-resizer" data-resize="${column.key}" title="Изменить ширину столбца" tabindex="0" role="separator" aria-label="Ширина столбца ${escape(column.accessibleLabel || column.label)}" aria-orientation="vertical" aria-valuemin="45" aria-valuemax="800" aria-valuenow="${this.columnWidth(column)}"></span></th>`).join('')}</tr></thead><tbody>${this.days.map(day => this.dayHtml(day)).join('') || (this.personal ? `<tr class="empty-day"><td colspan="${this.visible.length}">${escape(emptyPersonalMessage)}</td></tr>` : '')}</tbody></table></div>
       ${this.personal ? '' : `<div class="sheet-footer"><span data-save-status>${this.editor.dirty ? 'Есть несохраненные изменения' : this.editable ? 'Все изменения сохранены' : 'Просмотр графика'}</span><span>Tab — следующая ячейка · вставка диапазона из Excel</span></div>`}</section><div class="type-totals" data-type-totals></div>`;
     this.bind(); this.updateTotals(); this.updateEditingControls(); autoHeight(this.container); if (!this.personal) this.loadSummary();
     const scroll = this.container.querySelector('.table-scroll');
@@ -229,6 +241,7 @@ export class ScheduleView {
     days.forEach(day => this.renderDay(day));
   }
   expandDays(expanded) {
+    if (!this.days.length) return;
     this.expanded = new Set(expanded ? this.days.map(day => day.date) : []);
     const body = this.container.querySelector('.schedule-table tbody');
     if (!body) return;
@@ -318,7 +331,11 @@ export class ScheduleView {
     root.querySelector('[data-month]').onchange = event => this.changePeriod(`${state.period.slice(0,4)}-${event.target.value}`);
     root.querySelector('[data-year]').onchange = event => this.changePeriod(`${event.target.value}-${state.period.slice(5)}`);
     root.querySelector('[data-brigade]')?.addEventListener('change',event => this.changeBrigade(event.target.value));
-    root.querySelector('[data-personal-employee]')?.addEventListener('change',event => { this.employeeId = event.target.value; this.load(); });
+    root.querySelector('[data-personal-employee]')?.addEventListener('change',event => {
+      const employee = this.preview && state.admin ? this.previewEmployees.find(item => String(item.id) === event.target.value) : null;
+      if (!employee || this.editingTransition) return;
+      this.employeeId = employee.id; this.load();
+    });
     root.querySelector('[data-apply-roster]')?.addEventListener('click',() => this.applyRoster());
     root.querySelectorAll('[data-roster]').forEach(input => input.onchange = () => { if (this.editable) this.rosterDraft.set(Number(input.dataset.roster),input.value); });
     root.querySelector('[data-expand]').onclick = () => this.expandDays(true);
@@ -562,9 +579,28 @@ export class ScheduleView {
     (state.references.employees || []).forEach(employee => { text = text.replaceAll(`${employee.id}:`,`${employee.shortName || employee.name}:`); });
     return text;
   }
+  personalPaySummary() {
+    let amount = 0, counted = 0, hidden = 0, pending = 0;
+    for (const day of this.days) {
+      if (!day.financeVisible) { hidden++; continue; }
+      if (day.calculated?.pending || day.pay === null || day.pay === undefined || day.pay === '' || !Number.isFinite(Number(day.pay))) { pending++; continue; }
+      amount += Number(day.pay); counted++;
+    }
+    const unavailable = hidden + pending;
+    const details = [hidden ? `Еще не отображается смен: ${hidden}.` : '', pending ? `Ожидают расчета смен: ${pending}.` : ''].filter(Boolean).join(' ');
+    return {amount:!this.employeeId || (unavailable && !counted) ? null : Math.round(amount * 100) / 100,
+      note:unavailable ? `${counted ? 'Частичный итог. ' : ''}${details}` : ''};
+  }
   updateTotals(day) {
     const total = this.days.reduce((sum,item) => sum + Number((this.personal ? item.hours : item.calculated?.hours ?? item.hours) ?? 0),0);
     const target = this.container.querySelector('[data-month-hours]'); if (target) target.textContent = `${number(total)} ч`;
+    if (this.personal) {
+      const pay = this.personalPaySummary();
+      const amount = this.container.querySelector('[data-month-pay]');
+      const note = this.container.querySelector('[data-month-pay-note]');
+      if (amount) amount.textContent = pay.amount === null ? '—' : `${number(pay.amount)} ₽`;
+      if (note) { note.textContent = pay.note; note.hidden = !pay.note; }
+    }
     if (day) {
       const summary = [...this.container.querySelectorAll('[data-day-summary]')].find(element => element.dataset.daySummary === day.id);
       if (summary) summary.textContent = `${number((this.personal ? day.hours : day.calculated?.hours) ?? 0)} ч · ${day.rows.filter(row => row.type || row.task || row.object || row.objectExtra || row.notes || row.notesExtra).length} работ`;

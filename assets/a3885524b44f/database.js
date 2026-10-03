@@ -65,6 +65,8 @@ export function versionCheck(record,expected) {
 }
 function prepare(db) {
   db.sessions ||= {}; db.calendarLocks ||= {}; db.shiftLocks ||= {}; db.audit ||= []; db.vacations ||= []; db.payrollSnapshots ||= {};
+  db.settings ||= {};
+  db.settings.showEmployeePayImmediately ??= false;
   for (const value of Object.values(db.schedules)) for (const day of value.days) {
     day.rows ||= day.jobs || []; delete day.jobs;
     day.pay ??= null; day.employeeAdjustments ||= []; day.overrideReason ||= '';

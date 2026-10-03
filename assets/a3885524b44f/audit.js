@@ -4,7 +4,7 @@ import {escape,loading,failure,pageHeading} from './ui.js';
 
 const roles = {admin:'Администратор',office:'Офис',field:'Поле'};
 const slots = ['Бригадир','Основной напарник','Дополнительный напарник №1','Дополнительный напарник №2','Дополнительный сотрудник'];
-const entities = {shift:'График',brigade:'Бригада',brigades:'Бригады',employees:'Сотрудники',positions:'Должности',workTypes:'Виды работ',statuses:'Статусы сотрудников',invoiceStates:'Статусы счета',rates:'Ставки оплаты',roles:'Роли',user:'Пользователи',vacation:'Отпуска',year:'Архив',settings:'Пояснения'};
+const entities = {shift:'График',brigade:'Бригада',brigades:'Бригады',employees:'Сотрудники',positions:'Должности',workTypes:'Виды работ',statuses:'Статусы сотрудников',invoiceStates:'Статусы счета',rates:'Ставки оплаты',roles:'Роли',user:'Пользователи',vacation:'Отпуска',year:'Архив',settings:'Настройки'};
 const actions = {login:'Вход в систему',logout:'Выход из системы',password_changed:'Изменен пароль',password_reset:'Сброшен пароль',user_created:'Создан пользователь',user_updated:'Изменен пользователь',reference_created:'Добавлена запись',reference_updated:'Изменена запись',reference_deleted:'Удалена запись',shift_saved:'Сохранена смена',roster_applied:'Применен состав бригады',vacation_created:'Добавлен отпуск',vacation_updated:'Изменен отпуск',vacation_deleted:'Удален отпуск',year_created:'Создан год',year_closed:'Закрыт год',year_reopened:'Открыт год',settings_updated:'Изменены пояснения',references_imported:'Загружены справочники'};
 Object.assign(actions,{shift_roster_applied:'Применен состав смены',shift_vacation_applied:'Проставлен отпуск в смене',monthly_roster_updated:'Изменен состав бригады на месяц',legacy_payroll_recalculated:'Подтвержден перерасчет архивной смены'});
 entities.monthly_roster = 'Состав бригады на месяц';
@@ -14,6 +14,8 @@ const fields = {
 };
 const jobFields = {time:'Время',invoice:'Счет',type:'Вид работ',hours:'Часов на бригаду',objectId:'Артикул',object:'Объект',objectExtra:'Дополнительная строка объекта',phone:'Телефон работ',objectNotes:'Примечания по объекту',task:'ТЗ на работы',notes:'Примечания по работам / доп. ТЗ',notesExtra:'Дополнительная строка примечаний',tech:'Техбаза',tech2:'Техбаза — вторая ссылка'};
 fields.effectiveFrom = 'Дата начала действия условий';
+fields.showEmployeePayImmediately = 'Показывать зарплату сотруднику сразу';
+actions.settings_updated = 'Изменены настройки';
 const enums = {
   group:{office:'Офис',field:'Поля'},role:roles,systemRole:roles,
   kind:{work:'Рабочий день',duty:'Дежурство',leave:'Отпуск',other:'Другой',standard:'По ставкам',brigadier:'Бригадир',trainee:'Стажер',apprentice:'Ученик'},

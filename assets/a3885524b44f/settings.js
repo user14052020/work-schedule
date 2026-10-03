@@ -5,8 +5,19 @@ import {exportWorkbook} from './export.js';
 import {ViewLifecycle} from './view-lifecycle.js';
 
 export class SettingsView {
-  constructor(container,{archive = false} = {}) { this.container = container; this.archive = archive; this.lifecycle = new ViewLifecycle(); }
-  async mount() { if (this.archive) await this.loadYears(); else this.renderSettings(); }
+  constructor(container,{archive = false,preferences = false} = {}) { this.container = container; this.archive = archive; this.preferences = preferences; this.lifecycle = new ViewLifecycle(); }
+  async mount() { if (this.archive) await this.loadYears(); else if (this.preferences) this.renderPreferences(); else this.renderSettings(); }
+  renderPreferences() {
+    if (this.lifecycle.disposed) return;
+    this.container.innerHTML = pageHeading('Настройки') + `<form class="settings-form card"><label class="check-label"><input type="checkbox" name="showEmployeePayImmediately" ${state.settings.showEmployeePayImmediately ? 'checked' : ''} aria-describedby="pay-visibility-help">Показывать зарплату сотруднику сразу</label><p class="muted" id="pay-visibility-help">Если флажок снят, «ЗП за смену» отображается через три календарных дня после даты смены. Настройка действует и при просмотре графика сотрудника администратором.</p><button class="primary" type="submit">Сохранить настройки</button></form>`;
+    this.container.querySelector('form').onsubmit = async event => {
+      event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button');
+      const payload = {showEmployeePayImmediately:form.elements.showEmployeePayImmediately.checked}; button.disabled = true; form.inert = true;
+      try { const settings = await api.put('/settings',payload); if (this.lifecycle.disposed) return; Object.assign(state.settings,settings); toast('Настройки сохранены'); }
+      catch(error) { if (!this.lifecycle.disposed) showError(error); }
+      finally { button.disabled = false; form.inert = false; }
+    };
+  }
   renderSettings() {
     if (this.lifecycle.disposed) return;
     this.container.innerHTML = pageHeading('Пояснения и помощь','Текст подсказок, который видят пользователи системы.') + `<form class="settings-form card"><label>Пояснение к составу смены<textarea name="shiftHelp" rows="5" required>${escape(state.settings.shiftHelp)}</textarea></label><label>Текст «Как пользоваться»<textarea name="usageHelp" rows="14" required>${escape(state.settings.usageHelp)}</textarea></label><button class="primary" type="submit">Сохранить пояснения</button></form>`;
